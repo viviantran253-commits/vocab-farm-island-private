@@ -1,0 +1,80 @@
+{
+  "zip": "/mnt/data/vocab_farm_island_organized_assets.zip",
+  "zip_mb": 22.1,
+  "files_png": 208,
+  "files_total": 215,
+  "all_checks_passed": true,
+  "checks": [
+    {
+      "name": "Map size and grid",
+      "passed": true,
+      "detail": "Map is 2048x1280 and 32px-tile world is 64x40."
+    },
+    {
+      "name": "All 10 active girl sheets",
+      "passed": true,
+      "detail": "10 sprite sheets (feeding removed), each 4 x 64x64."
+    },
+    {
+      "name": "Player foot anchor",
+      "passed": true,
+      "detail": "Foot-bound lower edge values: [59]."
+    },
+    {
+      "name": "45 crop stages",
+      "passed": true,
+      "detail": "Nine crops x five stages; each 64x64."
+    },
+    {
+      "name": "Crop root anchor",
+      "passed": true,
+      "detail": "All alpha-bbox bottom edges: [56]."
+    },
+    {
+      "name": "Nine growth sheets",
+      "passed": true,
+      "detail": "9 sheets, each 320x64."
+    },
+    {
+      "name": "All 5 plot states aligned",
+      "passed": true,
+      "detail": "Five plot states now 108x88."
+    },
+    {
+      "name": "Seed, harvest, coin and XP icons",
+      "passed": true,
+      "detail": "All shop/inventory/HUD icons standardized by size variant."
+    },
+    {
+      "name": "Map references point to existing files",
+      "passed": true,
+      "detail": "All building and background file paths resolve."
+    },
+    {
+      "name": "No deprecated animal zone",
+      "passed": true,
+      "detail": "Removed old pasture zone."
+    },
+    {
+      "name": "10 planting plots",
+      "passed": true,
+      "detail": "5x2 grid; 2 start unlocked, 8 unlockable."
+    },
+    {
+      "name": "7 overlays match map pixels",
+      "passed": true,
+      "detail": "Color match fractions for visible pixels: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]. These do not prove occlusion gameplay correctness."
+    },
+    {
+      "name": "All necessary PNGs have no missing source",
+      "passed": true,
+      "detail": "Unavailable source paths: 0."
+    }
+  ],
+  "changes": [
+    "Normalized plot_locked.png to 108x88, preserving the art aspect ratio and original in source_masters.",
+    "Removed obsolete animal_care_area interaction zone and no-barn animal-care design note from data/map_layout.json."
+  ],
+  "missing_sources": [],
+  "folder": "/mnt/data/vocab-farm-island"
+}

@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#3a3425;background:#fcfaef}body{margin:0;padding:13px}h1{font-size:21px;margin:0 0 4px}p{line-height:1.4;margin:7px 0}.muted{color:#716f5f;font-size:12px}.head{display:flex;justify-content:space-between;align-items:center}.btn{border:0;border-radius:9px;background:#357c45;color:#fff;padding:10px 12px;cursor:pointer;font-weight:700;font-size:13px}.btn.secondary{background:#f1e7c9;color:#413b29;border:1px solid #d4bf87}.btn:disabled{opacity:.55}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.tile{background:white;border:1px solid #decda4;border-radius:11px;padding:9px;text-align:left;cursor:pointer}.tile.active{border:2px solid #398554;background:#f0f8ed}.tile b{display:block;margin-bottom:4px}.tile small{color:#666}.panel{background:white;border:1px solid #dfd0ac;border-radius:11px;margin-top:12px;padding:12px}.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.row input{min-width:0;flex:1;padding:9px;border:1px solid #c9b78e;border-radius:8px;font-size:14px}.stat{font-size:12px;color:#6f6959}.stat strong{font-size:16px;color:#274e37}.error{color:#a72822}.success{color:#2d7b46}.overflow{overflow:auto;max-height:350px}.logs{width:100%;border-collapse:collapse;font-size:11px}.logs th,.logs td{padding:7px 5px;border-bottom:1px solid #e6e1d4;text-align:left;vertical-align:top}.logs th{position:sticky;top:0;background:#faf6e8}.bad{color:#b02826;font-weight:700}.good{color:#297b45;font-weight:700}.group{display:flex;gap:5px;align-items:center;padding:7px 0}label{font-size:12px;font-weight:700}.pin{padding:10px;border:1px dashed #bc884a;border-radius:8px;background:#fff4d8;font-family:monospace;white-space:pre-wrap;word-break:break-word;font-size:14px}.empty{padding:12px;text-align:center;color:#777}</style></head>
+<body>
+<section class="panel" id="authPanel">
+ <h2>🔒 Teacher access · Giáo viên</h2>
+ <p class="muted">Only available inside your private Google Sheet.</p>
+ <div id="pinSetup" hidden><p>Create your 6-digit teacher PIN. It is never saved in the public student game.</p>
+   <label for="pinCreate">New teacher PIN</label><input id="pinCreate" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="6 digits">
+   <button class="btn" onclick="setupPin()">Set private PIN</button></div>
+ <div id="pinLogin" hidden><label for="pinEntry">Teacher PIN (6 digits)</label>
+   <input id="pinEntry" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="6 digits">
+   <button class="btn" onclick="loginTeacher()">Unlock dashboard</button></div>
+ <p id="authError" class="error" role="alert"></p>
+</section>
+<div id="adminContent" hidden><div class="head"><div><h1>🌱 Teacher Dashboard</h1><p class="muted">Private Google Sheet · 10 students</p></div><button class="btn secondary" onclick="refresh()">↻ Refresh</button></div>
+<p id="status" role="status" class="muted">Loading…</p>
+<section id="setup" class="panel" hidden><h3>Initialize class</h3><p>Create 10 student accounts, 10 vocabulary tabs, progress, and history records. Existing data will not be erased.</p><button class="btn" onclick="setup()">Set up Sheets</button></section><div id="initialPins"></div>
+<div id="studentGrid" class="grid"></div>
+<section id="studentPanel" hidden><div class="panel"><h3 id="studentTitle">Student</h3><div class="row"><div class="stat">Level <strong id="level">1</strong></div><div class="stat">Gold <strong id="gold">0</strong></div><div class="stat">XP <strong id="xp">0</strong></div><div class="stat">Words <strong id="words">0</strong></div><div class="stat">Plots <strong id="plotsUnlocked">2</strong>/10</div><div class="stat">Growing <strong id="cropsGrowing">0</strong></div></div><p id="summary" class="muted"></p><div class="group"><label for="displayName">Display name</label></div><div class="row"><input id="displayName" maxlength="28" placeholder="Name shown in game"><button class="btn" onclick="rename()">Save name</button></div><div class="group"><label for="newPin">Reset 4-digit student passcode</label></div><div class="row"><input id="newPin" inputmode="numeric" maxlength="4" placeholder="Blank = random"><button class="btn secondary" onclick="resetPin()">Reset PIN</button></div><div id="newPinResult"></div><p class="muted">Add words in the private <strong id="tabLabel">Vocab_01</strong> tab. Columns: English, UK IPA, POS, Vietnamese meaning, bilingual example. Students tap <strong>Words → Tải từ mới</strong> to reload.</p><div class="row"><button class="btn secondary" onclick="openSelectedVocab()">📚 Open this student's vocab tab</button></div></div>
+<div class="panel"><div class="head"><h3>Answer history</h3><button class="btn secondary" onclick="loadHistory()">Refresh history</button></div><label><input id="wrongOnly" type="checkbox" onchange="drawHistory()"> Show mistakes only</label><p id="historyInfo" class="muted"></p><div class="overflow"><table class="logs"><thead><tr><th>When</th><th>Word / task</th><th>Answer → correct</th><th>Result</th></tr></thead><tbody id="historyBody"></tbody></table></div></div></section>
+<section class="panel" id="teacherSettingsPanel"><h3>⚙️ Teacher settings · Cài đặt giáo viên</h3>
+ <p class="muted">Only available in this private Google Sheet. Students cannot open or change these settings from their game.</p>
+ <div class="group"><button class="btn secondary" onclick="downloadTemplate()">⬇ Download vocabulary CSV template</button></div>
+ <p class="muted">Enter daily words in Vocab_01–Vocab_10. To rename a student or reset their 4-digit code, select their account above. Only share the <strong>student web-app /exec link</strong>, never this Sheet.</p>
+ <div class="group"><label>Change private teacher PIN (optional)</label></div>
+ <div class="row"><input id="teacherOldPIN" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="Current PIN"><input id="teacherNewPIN" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="New PIN"></div>
+ <div class="row"><button class="btn secondary" onclick="changeTeacherPIN()">Change 6-digit PIN</button></div><p class="muted" id="teacherSettingsStatus" role="status"></p>
+</section></div>
+<script>
+let rows=[],selected=null,logs=[],teacherToken=null;
+const byId=x=>document.getElementById(x);
+const esc=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const rawCall=(name,...args)=>new Promise((ok,bad)=>google.script.run.withSuccessHandler(ok).withFailureHandler(bad)[name](...args));
+const call=(name,...args)=>{if(!teacherToken)return Promise.reject(Error('Enter your teacher PIN first.'));return rawCall(name,teacherToken,...args)};
+async function initAuth(){try{const s=await rawCall('teacherPinStatus');byId('pinSetup').hidden=!!s.configured;byId('pinLogin').hidden=!s.configured;}catch(e){byId('authError').textContent=e.message;}}
+async function setupPin(){const pin=byId('pinCreate').value;if(!/^\d{6}$/.test(pin)){byId('authError').textContent='Enter exactly six digits.';return;}
+ try{await rawCall('configureTeacherPin',pin,'');byId('pinCreate').value='';byId('authError').textContent='PIN saved privately. Enter it to continue.';await initAuth();}catch(e){byId('authError').textContent=e.message;}}
+async function loginTeacher(){const pin=byId('pinEntry').value;try{const s=await rawCall('authorizeTeacher',pin);teacherToken=s.token;byId('pinEntry').value='';byId('authPanel').hidden=true;byId('adminContent').hidden=false;await refresh();}catch(e){byId('authError').textContent=e.message;}}
+byId('pinEntry').addEventListener('keydown',e=>{if(e.key==='Enter')loginTeacher()});
+initAuth();
+function status(t,cls='muted'){byId('status').textContent=t;byId('status').className=cls;}
+async function refresh(){status('Loading…');try{const data=await call('studentSummary');byId('setup').hidden=!data.needsSetup;rows=data.students||[];drawGrid();if(rows.length){if(!selected||!rows.some(x=>x.id===selected))selected=rows[0].id;selectStudent(selected);}status('Data refreshed.','success');}catch(e){status(e.message,'error');}}
+function drawGrid(){byId('studentGrid').innerHTML=rows.map(s=>`<button class="tile ${s.id===selected?'active':''}" onclick="selectStudent('${s.id}')"><b>${esc(s.name)} <small>(${s.id})</small></b><small>${s.total} answers · ${s.correct} ✓ / ${s.wrong} ×</small></button>`).join('');}
+async function selectStudent(id){selected=id;drawGrid();const s=rows.find(x=>x.id===id);if(!s)return;byId('studentPanel').hidden=false;byId('studentTitle').textContent=s.name+' · '+id;byId('level').textContent=s.level;byId('gold').textContent=s.gold;byId('xp').textContent=s.xp;byId('words').textContent=s.words;byId('plotsUnlocked').textContent=s.plotsUnlocked;byId('cropsGrowing').textContent=s.cropsGrowing;byId('summary').textContent=`${s.total} submitted answers · ${s.correct} correct · ${s.wrong} incorrect · ${s.unverified||0} unverified · ${s.total?Math.round(s.correct/s.total*100):0}% accuracy · ${s.badges||0} badges · ${s.harvested||0} crops stored · Last saved: ${s.lastSaved?new Date(s.lastSaved).toLocaleString():'not yet'}`;byId('displayName').value=s.name;byId('tabLabel').textContent='Vocab_'+id;byId('newPinResult').textContent='';await loadHistory();}
+async function loadHistory(){if(!selected)return;byId('historyInfo').textContent='Loading answer history…';try{logs=await call('studentHistory',selected,250);drawHistory();}catch(e){byId('historyInfo').textContent=e.message;}}
+function drawHistory(){const wrong=byId('wrongOnly').checked,data=wrong?logs.filter(x=>x.result!=='Correct'):logs;byId('historyInfo').textContent=`Showing ${data.length} of ${logs.length} recent entries`;byId('historyBody').innerHTML=data.length?data.map(x=>`<tr><td>${esc(new Date(x.time).toLocaleDateString())}</td><td><b>${esc(x.word)}</b><br>${esc(x.source)} · ${esc(x.stage)}${x.attempt>1?' · Try '+x.attempt:''}</td><td>${esc(x.answer)}<br><small>→ ${esc(x.expected)}</small></td><td class="${x.result==='Correct'?'good':'bad'}">${x.result==='Correct'?'✓':'×'}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No answers yet</td></tr>';}
+async function rename(){const name=byId('displayName').value.trim();try{await call('changeStudentName',selected,name);status('Student name updated.','success');await refresh();}catch(e){status(e.message,'error');}}
+async function resetPin(){const pin=byId('newPin').value.trim();if(pin&&!/^\d{4}$/.test(pin)){status('PIN must have four digits.','error');return;}if(!confirm('Reset this student’s passcode?'))return;try{const r=await call('resetStudentPIN',selected,pin);byId('newPinResult').innerHTML=`<p class="pin">New passcode for ${esc(r.id)}: <strong>${esc(r.pin)}</strong><br>Share it privately with the student.</p>`;byId('newPin').value='';status('Passcode updated; old sessions revoked.','success');}catch(e){status(e.message,'error');}}
+async function openSelectedVocab(){
+ if(!selected)return;try{const x=await call('teacherVocabSheetLink',selected);window.open(x.url,'_blank','noopener,noreferrer');}catch(e){status(e.message,'error');}
+}
+function downloadTemplate(){
+ const rows=[['English word','UK IPA','Part of speech','Meaning','Example meaning'],['planet','/ˈplæn.ɪt/','n','hành tinh','Earth is a planet. (Trái Đất là một hành tinh.)']];
+ const csv='\ufeff'+rows.map(row=>row.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+ const a=document.createElement('a');a.href=url;a.download='vocab_farm_template.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function changeTeacherPIN(){
+ const oldPin=byId('teacherOldPIN').value,newPin=byId('teacherNewPIN').value,out=byId('teacherSettingsStatus');
+ if(!/^\d{6}$/.test(oldPin)||!/^\d{6}$/.test(newPin)){out.textContent='Enter both old and new 6-digit PINs.';return;}
+ if(!confirm('Change the private teacher PIN and sign out of this dashboard?'))return;
+ try{await rawCall('configureTeacherPin',newPin,oldPin);teacherToken=null;byId('teacherOldPIN').value='';byId('teacherNewPIN').value='';byId('adminContent').hidden=true;byId('authPanel').hidden=false;await initAuth();out.textContent='';byId('authError').textContent='PIN changed. Log in using your new PIN.';}catch(e){out.textContent=e.message;}
+}
+async function setup(){try{const r=await call('setupVocabFarm');const panel=byId('initialPins');if(r.created.length){panel.innerHTML='<p><b>Record the new passcodes now. They will not be shown again.</b></p><pre class="pin">'+r.created.map(x=>`${x.id}: ${x.pin}`).join('\n')+'</pre>';}else panel.innerHTML='<p>All accounts already exist.</p>';await refresh();}catch(e){status(e.message,'error');}}
+</script></body></html>
