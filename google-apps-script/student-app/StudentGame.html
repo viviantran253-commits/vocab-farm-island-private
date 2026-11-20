@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#4d8f5b">
-  <title>Vocab Farm Island — Playable Game v0.11</title>
-  <style><?!= include("Stylesheet"); ?></style>
+  <title>Vocab Farm Island — Classroom Game v0.13</title>
   <base href="<?= assetBaseUrl ?>">
+  <style><?!= include("Stylesheet"); ?></style>
 
 </head>
 <body>
@@ -26,8 +26,8 @@
           <option value="07">Student 07</option><option value="08">Student 08</option>
           <option value="09">Student 09</option><option value="10">Student 10</option>
         </select>
-        <label for="passcode">4-digit demo passcode</label>
-        <input id="passcode" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off" placeholder="4 digits" aria-label="Demo passcode">
+        <label for="passcode">4-digit student passcode</label>
+        <input id="passcode" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off" placeholder="4 digits" aria-label="Student passcode">
         <p class="demo-code">Demo code for this profile: <strong id="demoPin">0001</strong></p>
         <p id="loginError" class="field-error" role="alert"></p>
         <button id="playButton" class="primary-btn full-btn" type="button">🌿 Enter the Island</button>
@@ -102,6 +102,7 @@
     </div>
   </div>
   <noscript>This game needs JavaScript. Please enable JavaScript in your browser.</noscript>
+  <script>window.FARM_ONLINE = true;</script>
   <script><?!= include("MapConfig"); ?></script>
   <script><?!= include("GameCode"); ?></script>
 </body>

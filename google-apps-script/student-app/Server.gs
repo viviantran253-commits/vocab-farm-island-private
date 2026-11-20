@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.3: PUBLIC STUDENT web app (separate Apps Script project).
+/** Vocab Farm Island v0.13: PUBLIC STUDENT web app (separate Apps Script project).
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Set Script Properties: SHEET_ID (private Google Sheet ID),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -11,7 +11,7 @@ const HISTORY_TAB = '_History';
 const VOCAB_PREFIX = 'Vocab_';
 const SESSION_TTL = 21600;  // 6 hours, CacheService maximum
 
-function include(filename) { return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
+function include(filename) { return HtmlService.createTemplateFromFile(filename).getRawContent(); }
 function doGet() {
   const tpl = HtmlService.createTemplateFromFile('StudentGame');
   let base = PropertiesService.getScriptProperties().getProperty('ASSET_BASE_URL') || '';
@@ -54,7 +54,10 @@ function readWords_(ss,id) {
   const out=[],taken={};
   for(let i=1;i<rows.length;i++){
     const [en,ipa,pos0,meaning,example]=rows[i].map(x=>String(x).trim());
-    const pos=pos0.toLowerCase().replace(/[().\s]/g,'');
+    const rawPos=pos0.toLowerCase().replace(/[().\s]/g,'');
+    // Classroom lists also use "phr.v", "phr" and "n/v". Map them to the
+    // game's four question categories without discarding otherwise valid words.
+    const pos=rawPos==='phrv'||rawPos==='phr'?'v':rawPos==='n/v'?'n':rawPos;
     if(!en||!ipa||!meaning||!example||!['n','v','adj','adv'].includes(pos))continue;
     const base=en.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_'+pos;
     const key='sheet_'+id+'_'+base;

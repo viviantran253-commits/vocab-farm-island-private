@@ -1,38 +1,23 @@
-# Vocab Farm Island — v0.13
+# Vocab Farm Island — classroom game v0.13
 
-**Ready for local demonstration and manual cloud setup; NOT already deployed online.**
+## Play
 
-## Start
-- For an **offline demo**, open `index.html` in a browser; Student 01 PIN `0001` is only a public demonstration code.
-- For **real classroom accounts, teacher-controlled vocabulary and cross-device progress tracking**, follow **`FINAL_SETUP_GOOGLE_SHEETS_GITHUB.md`** exactly.
-- Use the separately packaged `Vocab_Farm_Island_GitHub_Public_v0_6.zip` for the public GitHub repository. The public site is an assets host/landing page; the online student game runs at a separately deployed Google Apps Script `/exec` link.
-- The teacher dashboard is inside your private Google Sheet under **Vocab Farm → Open Teacher Dashboard** and requires your teacher PIN; no private data or teacher PIN is included in the public files.
-- **Student Settings has been removed.** Students can view records and reload vocabulary from **Words**. Teacher controls are in the private dashboard.
+- **Official classroom link:** https://viviantran253-commits.github.io/vocab-farm-island-private/
+- The GitHub page opens the live Google Apps Script game. Choose a student profile and enter that student's private four-digit passcode. The public demo codes do not work here.
+- The private Google Sheet supplies each student's vocabulary and stores their progress and answer history. New vocabulary appears after signing in again or choosing **Words → Reload words** in the game.
+- **Offline demo:** [demo.html](demo.html) runs locally and saves only in that browser. It does not use the teacher Sheet.
 
-Please retain backups of previous versions before changing your files. Existing offline progress is not automatically transferred to Google Sheets. No paid services or passwords are needed to prepare this code.
+## Teacher workflow
 
-## Current in v0.13
-- Plots 1–2 are free. Plots 3–10 require their stated levels and a single unlock payment (100, 200, …, 800 gold).
-- There are **no daily or recurring planting-plot charges**. Unlocking a plot never charges extra after the initial payment.
-- Existing student IDs, vocabulary, levels, gold, XP, unlocked plots, crops and answer histories remain compatible.
-- Old obsolete plot-charge metadata is ignored and removed when profile data is loaded or saved.
-- Offline and Apps Script student game code match. Student save format stays version 2.
+Open the restricted teacher Google Sheet and choose **Vocab Farm → Open Teacher Dashboard**. Add words to `Vocab_01` through `Vocab_10`, one student per tab, with English, IPA, part of speech, Vietnamese meaning, and example sentence in columns A–E. The teacher dashboard manages names, student passcodes, progress, and answer history. Keep the Sheet restricted; students only need the official game link and their individual passcode.
 
-## Earlier in v0.8
-- Fixed duplicate characters in missing-letter tasks (for example, typing `r` in `o_g_n_s_` now fills only one blank).
-- Uses the browser's native `input` event for typing. `keydown` now handles navigation, deleting, and submitting only.
-- The fix is applied to both `game.js` (offline) and `google-apps-script/student-app/GameCode.html` (online).
-- Previous game features, student progress format, and private teacher files are unchanged.
+The live student Apps Script project is `Vocab Farm Student Game`. Its private Script Properties hold `SHEET_ID` and `ASSET_BASE_URL`. Its web app runs as the teacher account and allows anyone to open the login page; access to each profile requires its passcode. The GitHub Pages site hosts artwork and routes visitors to that web app. No Sheet ID or PIN is stored in public source.
 
-**Already deployed online?** Replace `GameCode.html` in the Google Apps Script student web-app project and deploy a new version. You do not need to republish the teacher dashboard or Google Sheet for this fix. A hard refresh on student devices can help ensure the latest version loads.
+## Code and updates
 
-## Earlier in v0.7
-- Spelling tasks now contain real editable blanks within the word. Tap/click a blank and type normally; focus moves to the next blank automatically.
-- Plot pricing has subsequently changed; see **Current in v0.10** above.
-- Both the offline game and the Google Apps Script student-app template are updated.
+- `google-apps-script/student-app/` contains the live web app source. After editing it, copy changed files into the Apps Script project and **deploy a new version of the existing web app deployment**.
+- `google-apps-script/teacher-dashboard/` contains the separate Sheet-bound teacher dashboard source.
+- `game.js`, `style.css`, and `map-config.js` power `demo.html`; keep gameplay changes aligned with the student app files.
+- `FINAL_SETUP_GOOGLE_SHEETS_GITHUB.md` is a setup guide for a fresh installation. This repository is already connected and deployed.
 
-**If already deployed online:** update `GameCode.html` and `Stylesheet.html` in the student Apps Script project, then deploy a **new version** of the web app. The Google Sheet and teacher dashboard files do not need to be replaced for these two fixes.
-
-## Updating an existing Apps Script deployment
-
-Replace `GameCode.html` and `Server.gs` in your private student web-app project, save, and deploy a new version. You do not need to reset student accounts, private vocabulary tabs, or the teacher dashboard. Keep a backup of the old code and data before updating.
+Existing offline demo progress is not imported into the teacher Sheet. Google Apps Script and Sheets service quotas still apply.

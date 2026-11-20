@@ -5,7 +5,7 @@
 'use strict';
 const MAP = window.FARM_MAP;
 const ASSET = 'assets/';
-const ONLINE = !!(window.google && window.google.script && window.google.script.run);
+const ONLINE = !!window.FARM_ONLINE || !!(window.google && window.google.script && window.google.script.run);
 const ACTION_DURATION_MS = 2000;
 const CROP_DATA = [
   {id:'carrot', name:'Carrot', vi:'Cà rốt', seed:8, sale:18, xp:4, mins:6, level:1},
@@ -730,7 +730,7 @@ function toggleTeacherAccess(){
 }
 function openPrivateTeacherSheet(){
  const input=$('teacherSheetUrl');const raw=(input.value||'').trim();
- if(!raw){window.open('https://docs.google.com/spreadsheets/u/0/','_blank','noopener,noreferrer');return;}
+ if(!raw){window.open('https:' + String.fromCharCode(47,47) + 'docs.google.com/spreadsheets/u/0/','_blank','noopener,noreferrer');return;}
  try{const url=new URL(raw);if(url.protocol!=='https:'||url.hostname!=='docs.google.com'||!url.pathname.startsWith('/spreadsheets/d/'))throw Error('Invalid Sheet URL');
   window.open(url.href,'_blank','noopener,noreferrer');
  }catch(_){$('teacherAccessError').textContent='Paste a valid private Google Sheets URL, or leave it blank to open Google Sheets.'}

@@ -1,5 +1,7 @@
 # Vocab Farm Island v0.6 — Complete no-payment setup guide
 
+> **Current installation (November 2026):** The official classroom game is already deployed at https://viviantran253-commits.github.io/vocab-farm-island-private/. This page describes how to set up a separate installation from scratch. In the current repository, `index.html` is the official launcher and `demo.html` is the local offline demonstration. See [README.md](README.md) for the current teacher workflow.
+
 **For:** one teacher, approximately ten students using phones/iPads/computers, one private Google Sheet, one public GitHub repository, and one free Google Apps Script student web app.
 
 **Important distinction:** The ZIP's `index.html` is a **local demonstration**. It cannot share student progress across devices. To track answers from your computer while a student plays on their phone, the student must use the **Google Apps Script `/exec` game link** described in Part C. GitHub Pages provides **public artwork and an optional landing-page link**, not the student database.
