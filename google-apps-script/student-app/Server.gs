@@ -122,6 +122,8 @@ function studentSave(session,profileJson,events,expectedRevision){
  const proposed=verifyProfile_(JSON.parse(profileJson),id);proposed.name=user.name;
  const ss=data_(),lock=LockService.getScriptLock();lock.waitLock(20000);
  try{
+  // A teacher reset can invalidate the session while a save is queued.
+  requireSession_(session);
   const p=readProgress_(ss,id,user.name);
   if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
   const history=tab_(ss,HISTORY_TAB),seen=new Set(p.seen||[]);

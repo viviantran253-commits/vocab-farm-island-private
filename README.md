@@ -11,6 +11,10 @@
 
 Open the restricted teacher Google Sheet and choose **Vocab Farm → Open Teacher Dashboard**. Add words to `Vocab_01` through `Vocab_10`, one student per tab, with English, IPA, part of speech, Vietnamese meaning, and example sentence in columns A–E. The teacher dashboard manages names, student passcodes, progress, and answer history. Keep the Sheet restricted; students only need the official game link and their individual passcode.
 
+To start a student over, select their ID in the teacher dashboard, type that same two-digit ID under **Start this student over**, and click **Reset game progress**. This resets only that student's game and answer history to Level 1. Their name, passcode and vocabulary remain. The previous progress and answers are copied to the private `_ResetArchive` tab; the student must sign in again.
+
+Adding new shop items later does not itself clear saved progress. Keep the existing save fields and item IDs compatible when updating the game, and migrate older profiles if a future item needs new save data.
+
 The live student Apps Script project is `Vocab Farm Student Game`. Its private Script Properties hold `SHEET_ID` and `ASSET_BASE_URL`. Its web app runs as the teacher account and allows anyone to open the login page; access to each profile requires its passcode. The GitHub Pages site hosts artwork and routes visitors to that web app. No Sheet ID or PIN is stored in public source.
 
 ## Code and updates
