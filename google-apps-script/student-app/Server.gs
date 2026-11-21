@@ -14,7 +14,7 @@ const MAGIC_CHARACTERS = ['itadori_yuji','monkey_d_luffy','sakura_kinomoto','dor
 const VOCAB_PREFIX = 'Vocab_';
 const SESSION_TTL = 21600;  // 6 hours, CacheService maximum
 
-function include(filename) { return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
+function include(filename) { return HtmlService.createTemplateFromFile(filename).getRawContent(); }
 function doGet() {
   const tpl = HtmlService.createTemplateFromFile('StudentGame');
   let base = PropertiesService.getScriptProperties().getProperty('ASSET_BASE_URL') || '';

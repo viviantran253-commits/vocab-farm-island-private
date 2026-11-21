@@ -10,7 +10,10 @@ const server = vm.createContext({
   PropertiesService: { getScriptProperties: () => ({ getProperty: key => properties[key] || '' }) },
   SpreadsheetApp: { openById: id => ({ id }) },
   HtmlService: {
-    createTemplateFromFile: () => (template = { evaluate: () => ({ setTitle: title => ({ title }) }) }),
+    createTemplateFromFile: name => (template = {
+      getRawContent: () => `raw:${name}`,
+      evaluate: () => ({ setTitle: title => ({ title }) }),
+    }),
     createHtmlOutput: value => value,
   },
 });
@@ -18,6 +21,7 @@ vm.runInContext(source, server);
 
 test('official deployment uses existing Sheet property and v0.30 asset directory', () => {
   assert.equal(server.data_().id, 'private-teacher-sheet');
+  assert.equal(server.include('GameCode'), 'raw:GameCode');
   assert.equal(server.doGet().title, 'Vocab Farm Island');
   assert.equal(template.assetBaseUrl, 'https://example.github.io/vocab-farm-island-private/staging/v0.30/');
 });
