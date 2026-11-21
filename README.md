@@ -1,17 +1,17 @@
-# Vocab Farm Island — classroom game v0.13
+# Vocab Farm Island — classroom game v0.30
 
 ## Play
 
 - **Official classroom link:** https://viviantran253-commits.github.io/vocab-farm-island-private/
 - The GitHub page opens the live Google Apps Script game. Choose a student profile and enter that student's private four-digit passcode. The public demo codes do not work here.
 - The private Google Sheet supplies each student's vocabulary and stores their progress and answer history. New vocabulary appears after signing in again or choosing **Words → Reload words** in the game.
-- **Offline demo:** [demo.html](demo.html) runs locally and saves only in that browser. It does not use the teacher Sheet.
+- **Offline demo:** [demo.html](demo.html) is the older v0.13 local demo. It saves only in that browser and does not use the teacher Sheet.
 
 ## Teacher workflow
 
 Open the restricted teacher Google Sheet and choose **Vocab Farm → Open Teacher Dashboard**. Add words to `Vocab_01` through `Vocab_10`, one student per tab, with English, IPA, part of speech, Vietnamese meaning, and example sentence in columns A–E. The teacher dashboard manages names, student passcodes, progress, and answer history. Keep the Sheet restricted; students only need the official game link and their individual passcode.
 
-To start a student over, select their ID in the teacher dashboard, type that same two-digit ID under **Start this student over**, and click **Reset game progress**. This resets only that student's game and answer history to Level 1. Their name, passcode and vocabulary remain. The previous progress and answers are copied to the private `_ResetArchive` tab; the student must sign in again.
+To start a student over, select their ID in the teacher dashboard, type that same two-digit ID under **Start this student over**, and click **Reset game progress**. This resets only that student's game, Special Seed ledger, and answer history to Level 1. Their name, passcode and vocabulary remain. The previous rows are copied to the private `_ResetArchive` tab; the student must sign in again.
 
 Adding new shop items later does not itself clear saved progress. Keep the existing save fields and item IDs compatible when updating the game, and migrate older profiles if a future item needs new save data.
 
@@ -19,10 +19,10 @@ The live student Apps Script project is `Vocab Farm Student Game`. Its private S
 
 ## Code and updates
 
-- [v0.30 staging](staging/v0.30/README.md) contains the updated student game, its new assets, source audit, and migration notes. It is source for a separate test deployment; the official link above still serves v0.13.
+- [v0.30 staging](staging/v0.30/README.md) retains the supplied candidate, source audit, and migration notes. The official student source has been promoted with production settings and uses its public assets.
 - `google-apps-script/student-app/` contains the live web app source. After editing it, copy changed files into the Apps Script project and **deploy a new version of the existing web app deployment**.
 - `google-apps-script/teacher-dashboard/` contains the separate Sheet-bound teacher dashboard source.
-- `game.js`, `style.css`, and `map-config.js` power `demo.html`; keep gameplay changes aligned with the student app files.
+- `game.js`, `style.css`, and `map-config.js` power the older `demo.html` only. The official game uses `google-apps-script/student-app/`.
 - `FINAL_SETUP_GOOGLE_SHEETS_GITHUB.md` is a setup guide for a fresh installation. This repository is already connected and deployed.
 
 Existing offline demo progress is not imported into the teacher Sheet. Google Apps Script and Sheets service quotas still apply.

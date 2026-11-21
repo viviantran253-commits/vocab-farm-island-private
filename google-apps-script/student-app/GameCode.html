@@ -1,11 +1,22 @@
-/* Vocab Farm Island v0.13
-   Offline demo or optional Google Apps Script student server.
-   Never place teacher privileges or Google credentials here. */
+/* Vocab Farm Island v0.30: official online classroom game. */
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
 const ASSET = 'assets/';
-const ONLINE = !!window.FARM_ONLINE || !!(window.google && window.google.script && window.google.script.run);
+// Use the official Apps Script backend and the teacher's private Sheet.
+const ONLINE = true;
+const DEV_EDITION = false;
+const DEV_SETTINGS_KEY = 'vocabFarmDeveloperSettings_v1';
+function loadDeveloperSettings(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(DEV_SETTINGS_KEY)||'null');
+    return {fastGrowth:raw?.fastGrowth!==false,unlimitedSeeds:raw?.unlimitedSeeds!==false};
+  }catch(_){return {fastGrowth:true,unlimitedSeeds:true};}
+}
+let devSettings={fastGrowth:false,unlimitedSeeds:false}; // Classroom rules; never read Developer Test shortcuts
+function storeDeveloperSettings(){
+  try{localStorage.setItem(DEV_SETTINGS_KEY,JSON.stringify(devSettings));}catch(e){console.warn('Could not save developer settings',e);}
+}
 const ACTION_DURATION_MS = 2000;
 const CROP_DATA = [
   {id:'carrot', name:'Carrot', vi:'Cà rốt', seed:8, sale:18, xp:4, mins:6, level:1},
@@ -19,6 +30,109 @@ const CROP_DATA = [
   {id:'pineapple', name:'Pineapple', vi:'Dứa', seed:90, sale:130, xp:12, mins:18, level:12}
 ];
 const CROPS = Object.fromEntries(CROP_DATA.map(c => [c.id,c]));
+const SPECIAL_SEED={id:'special',name:'Special Seed',vi:'Hạt giống kỳ diệu',seed:300,level:5,mins:12};
+const SPECIAL_ACTIONS=['Water','Tend','Give Milk','Feed Meal'];
+const SPECIAL_ACTION_VI=['Tưới nước','Chăm sóc','Cho uống sữa','Cho ăn'];
+const SPECIAL_ANIM=['water','tend','give_milk','feed_meal'];
+const CHARACTER_DATA=[
+ {id:'itadori_yuji',name:'Itadori Yuji',phrases:[
+  {en:'I won’t regret the way I live!',vi:'Tớ sẽ sống sao cho không phải hối tiếc!'},
+  {en:'We can do this together!',vi:'Chúng ta có thể cùng nhau làm được!'},
+  {en:'I’ll keep moving forward!',vi:'Tớ sẽ tiếp tục tiến về phía trước!'}]},
+ {id:'monkey_d_luffy',name:'Monkey D. Luffy',phrases:[
+  {en:'I’m gonna be King of the Pirates!',vi:'Tớ sẽ trở thành Vua Hải Tặc!'},
+  {en:'Adventure is waiting for us!',vi:'Cuộc phiêu lưu đang chờ chúng ta!'},
+  {en:'I never leave my friends behind!',vi:'Tớ không bao giờ bỏ lại bạn bè!'}]},
+ {id:'sakura_kinomoto',name:'Sakura Kinomoto',phrases:[
+  {en:'Everything will definitely be all right!',vi:'Nhất định mọi chuyện sẽ ổn thôi!'},
+  {en:'Believe in a little magic!',vi:'Hãy tin vào một chút phép màu!'},
+  {en:'Let’s make today wonderful!',vi:'Cùng biến hôm nay thành một ngày tuyệt vời nhé!'}]},
+ {id:'doraemon',name:'Doraemon',phrases:[
+  {en:'I’ve got a gadget for that!',vi:'Tớ có bảo bối giúp được việc đó!'},
+  {en:'A good idea can solve a big problem!',vi:'Một ý tưởng hay có thể giải quyết vấn đề lớn!'},
+  {en:'Let’s help each other!',vi:'Chúng ta hãy giúp đỡ lẫn nhau!'}]},
+ {id:'pikachu',name:'Pikachu',phrases:[
+  {en:'Pika, pika!',vi:'Pika, pika!'},
+  {en:'Pika-pika! You can do it!',vi:'Pika-pika! Bạn làm được mà!'},
+  {en:'Pika! What a happy day!',vi:'Pika! Thật là một ngày vui!'}]},
+ {id:'shin_chan',name:'Shin-chan',phrases:[
+  {en:'Hey! It’s me, Shin-chan!',vi:'Xin chào! Shin-chan đây!'},
+  {en:'Let’s have some fun!',vi:'Cùng vui chơi nào!'},
+  {en:'I’ve got a silly idea!',vi:'Tớ có một ý tưởng ngộ nghĩnh đây!'}]},
+ {id:'rudo',name:'Rudo',phrases:[
+  {en:'Even thrown-away things have value!',vi:'Ngay cả những thứ bị vứt bỏ cũng có giá trị!'},
+  {en:'Nothing is useless if you look closely!',vi:'Không gì là vô dụng nếu bạn nhìn kỹ!'},
+  {en:'I’ll build something better!',vi:'Tớ sẽ tạo ra thứ gì đó tốt đẹp hơn!'}]},
+ {id:'sakura_haruka',name:'Sakura Haruka',phrases:[
+  {en:'Don’t underestimate me!',vi:'Đừng có coi thường tôi!'},
+  {en:'I can protect this place!',vi:'Tôi có thể bảo vệ nơi này!'},
+  {en:'You can count on me!',vi:'Cứ tin tưởng ở tôi!'}]},
+ {id:'hoshina_soshiro',name:'Hoshina Soshiro',phrases:[
+  {en:'Leave this to me!',vi:'Cứ để tôi lo!'},
+  {en:'Stay calm and stay sharp!',vi:'Hãy bình tĩnh và luôn tỉnh táo!'},
+  {en:'A little practice goes a long way!',vi:'Luyện tập từng chút sẽ mang lại kết quả lớn!'}]},
+ {id:'kamado_tanjiro',name:'Kamado Tanjiro',phrases:[
+  {en:'I’ll protect everyone!',vi:'Mình sẽ bảo vệ tất cả mọi người!'},
+  {en:'Kindness makes us stronger!',vi:'Lòng tốt khiến chúng ta mạnh mẽ hơn!'},
+  {en:'Take a breath. Keep going!',vi:'Hít một hơi nào. Tiếp tục cố gắng nhé!'}]},
+ {id:'saitama',name:'Saitama',phrases:[
+  {en:'OK.',vi:'Ừ.'},
+  {en:'Let’s get this over with.',vi:'Làm cho xong chuyện này nào.'},
+  {en:'A good bargain makes my day!',vi:'Mua được món hời là vui cả ngày!'}]},
+ {id:'asuna_yuuki',name:'Asuna Yuuki',phrases:[
+  {en:'I’ll fight by your side!',vi:'Mình sẽ chiến đấu bên cạnh bạn!'},
+  {en:'Together, we can find a way!',vi:'Cùng nhau, chúng ta sẽ tìm ra cách!'},
+  {en:'Courage starts with one step!',vi:'Lòng dũng cảm bắt đầu từ một bước chân!'}]}
+];
+const CHARACTER_BY_ID=Object.fromEntries(CHARACTER_DATA.map(c=>[c.id,c]));
+const FENCE_PRICE=20;
+const FENCE_GRID=32;
+// Sell for 75% of the individual item price. This is below every pack discount too,
+// so buying a decoration pack and immediately reselling cannot generate free gold.
+const DECOR_SELL_RATE=0.75;
+const DECOR_ITEMS=[
+ {id:'daisy_bush',name:'Daisy Bush',pack:'garden',price:55,radius:18,size:62},
+ {id:'flower_planter',name:'Flower Planter',pack:'garden',price:75,radius:18,size:66},
+ {id:'sunflowers',name:'Sunflower Cluster',pack:'garden',price:65,radius:17,size:74},
+ {id:'stone_birdbath',name:'Stone Birdbath',pack:'garden',price:95,radius:16,size:71},
+ {id:'park_bench',name:'Park Bench',pack:'park',price:85,radius:23,size:79},
+ {id:'lantern_post',name:'Lantern Post',pack:'park',price:100,radius:13,size:79},
+ {id:'picnic_table',name:'Picnic Table',pack:'park',price:120,radius:25,size:84},
+ {id:'stepping_stones',name:'Stepping Stones',pack:'park',price:40,radius:23,size:73},
+ {id:'water_well',name:'Water Well',pack:'rustic',price:100,radius:25,size:86},
+ {id:'wooden_signpost',name:'Wooden Signpost',pack:'rustic',price:40,radius:13,size:80},
+ {id:'harvest_basket',name:'Harvest Basket',pack:'rustic',price:35,radius:12,size:64},
+ {id:'quest_board',name:'Quest Board',pack:'rustic',price:90,radius:18,size:84},
+ {id:'torii_gate',name:'Torii Gate',pack:'japanese',price:125,radius:27,size:110},
+ {id:'stone_lantern',name:'Stone Lantern',pack:'japanese',price:100,radius:14,size:81},
+ {id:'sakura_tree',name:'Sakura Tree',pack:'japanese',price:150,radius:27,size:139},
+ {id:'koi_pond',name:'Koi Pond',pack:'japanese',price:135,radius:37,size:98},
+ {id:'beach_umbrella_table',name:'Beach Picnic Shade',pack:'beach',price:110,radius:30,size:105},
+ {id:'palm_tree',name:'Coconut Palm',pack:'beach',price:145,radius:26,size:132},
+ {id:'beach_lounger',name:'Beach Lounger',pack:'beach',price:105,radius:29,size:93},
+ {id:'sandcastle',name:'Sandcastle',pack:'beach',price:70,radius:16,size:68},
+ {id:'lantern_string',name:'Lantern String',pack:'festival',price:105,radius:29,size:114},
+ {id:'festival_stall',name:'Festival Stall',pack:'festival',price:135,radius:31,size:112},
+ {id:'flower_arch',name:'Flower Arch',pack:'festival',price:145,radius:30,size:113},
+ {id:'festival_drum',name:'Festival Drum',pack:'festival',price:75,radius:19,size:71}
+];
+// Retired Cozy Park items are retained only to preserve previously saved inventory and placements.
+const RETIRED_DECOR_IDS=new Set(['park_bench','lantern_post','picnic_table','stepping_stones']);
+const DECOR_SHOP_ITEMS=DECOR_ITEMS.filter(item=>!RETIRED_DECOR_IDS.has(item.id));
+const DECOR_BY_ID=Object.fromEntries(DECOR_ITEMS.map(x=>[x.id,x]));
+const DECOR_PACKS=[
+ {id:'garden',name:'Flower Garden Pack',description:'Flowers, bright greenery, and a birdbath',price:250},
+ {id:'rustic',name:'Rustic Farm Pack',description:'Well, signpost, basket, and notice board',price:225},
+ {id:'japanese',name:'Japanese Garden Pack',description:'Torii gate, stone lantern, sakura tree, and koi pond',price:410},
+ {id:'beach',name:'Beach Pack',description:'Beach shade, coconut palm, lounger, and sandcastle',price:335},
+ {id:'festival',name:'Festival Pack',description:'Lanterns, market stall, flower arch, and festival drum',price:350}
+];
+const decorArt=item=>`assets/decorations/${item.pack}/${item.id}.png`;
+
+const SPECIAL_REWARDS={1:{gold:450,xp:12},2:{gold:900,xp:24},3:{gold:2100,xp:42}};
+const companionArt=(id,kind,filename)=>`assets/companions/${id}/${kind}/${filename}.png`;
+const specialSeedArt='assets/special/special_seed_planted.png';
+const specialSeedShopArt='assets/special/special_seed_shop.png';
 const STAGES = ['planted','watered','tended','fertilized','mature'];
 const ACTIONS = ['Water','Tend','Fertilize','Harvest'];
 const ACTION_VI = ['Tưới cây','Chăm sóc cây','Bón phân','Thu hoạch'];
@@ -31,8 +145,11 @@ const PLOT_UNLOCKS = [
   {level:8, price:400},{level:10, price:500},{level:12, price:600},
   {level:15, price:700},{level:20, price:800}
 ];
-const STORAGE_PREFIX = 'vocabFarmOffline_v2_';
-const BANK_KEY = 'vocabFarmOffline_customBank_v1';
+const STORAGE_PREFIX = 'vocabFarmDeveloperTest_v1_'; // SAME v0.18–v0.27 prefix: no forced reset
+const BUILD_ID='v0.30',BACKUP_EVERY_MS=10*60*1000;
+const LAST_BUILD_PREFIX='vfi_last_build_v1_';
+let lastBackupAt=0,backupRunning=false,lastSaveErrorAt=0,pendingRecoveryImport=null;
+const BANK_KEY = 'vocabFarmDeveloperCustomBank_v1';
 const DAY_MS = 86400000;
 const ICT_OFFSET_MS = 7*3600000; // Vietnam UTC+07, no DST
 const RANKS = [
@@ -123,17 +240,72 @@ let lastTime=0,uiLast=0,saveLast=0;
 let debugPath=false;
 let visitorMessage='';
 let actionMotion=null;
+let placementMode=null;
+let petSpeech=null;
+let magicEffects=[];
+let lastPetClick=null;
+let pendingPetClickTimer=null;
+let worldPointerDown=null;
+let worldLongTimer=null;
+let fencePlacementPreview=null;
+let decorationPlacementPreview=null;
+let plantReadUntil=0;
+let plantReadTicker=null;
+function ensureCompanionState(){
+ if(!state)return;
+ if(!state.seeds)state.seeds={};
+ if(!Number.isFinite(state.seeds.special))state.seeds.special=0;
+ if(!Array.isArray(state.companions))state.companions=[];
+ if(!Array.isArray(state.discovered))state.discovered=[];
+ if(!Array.isArray(state.fences))state.fences=[];
+ if(!Number.isFinite(state.fenceStock))state.fenceStock=0;
+ if(typeof state.specialSeedLastPurchase!=='string')state.specialSeedLastPurchase='';
+ if(!Array.isArray(state.decorations))state.decorations=[];
+ if(!state.decorStock||typeof state.decorStock!=='object')state.decorStock={};
+ for(const item of DECOR_ITEMS)if(!Number.isFinite(state.decorStock[item.id]))state.decorStock[item.id]=0;
+ // Preserve unavailable or future decoration IDs in the saved collection.
+ // Their artwork is skipped until the catalog contains a matching definition.
+ state.decorations=state.decorations.filter(d=>d&&typeof d.id==='string'&&Number.isFinite(d.x)&&Number.isFinite(d.y));
+ for(const pet of state.companions){
+  pet.dir=pet.dir||'down';pet.x=Number(pet.x)||880;pet.y=Number(pet.y)||565;
+  pet.rarity=clamp(Number(pet.rarity)||1,1,3);
+  pet.target=null;pet.frame=0;pet.walkDistance=0;
+  // Migrate existing demo saves with characters positioned directly atop a fence.
+  if(!canPetStand(pet.x,pet.y)){
+   const safe=nearestPetSpot(pet.x,pet.y);
+   if(safe){pet.x=safe.x;pet.y=safe.y;}
+  }
+ }
+}
+function rollCompanion(){
+ const random=Math.random()*100;
+ const rarity=random<5?3:random<30?2:1;
+ const choice=CHARACTER_DATA[Math.floor(Math.random()*CHARACTER_DATA.length)];
+ return {characterId:choice.id,rarity};
+}
+function petById(pet){return CHARACTER_BY_ID[pet.characterId]||CHARACTER_DATA[0]}
+function effectPath(kind){return `assets/companion-effects/${kind}/${kind}_sheet.png`;}
+function spawnEffect(kind,x,y){magicEffects.push({kind,x,y,start:now()});magicEffects=magicEffects.slice(-24);}
+function drawEffects(){const elapsedNow=now();magicEffects=magicEffects.filter(e=>elapsedNow-e.start<950);for(const e of magicEffects){const im=asset(effectPath(e.kind));if(!im.complete||!im.naturalWidth)continue;const frame=Math.min(3,Math.floor((elapsedNow-e.start)/230));ctx.drawImage(im,frame*64,0,64,64,e.x-32,e.y-53,64,64);}}
+function companionStars(n){return '★'.repeat(clamp(Number(n)||1,1,3))}
+function canBuySpecial(){return state.level>=SPECIAL_SEED.level&&state.gold>=SPECIAL_SEED.seed&&state.specialSeedLastPurchase!==dateKey()}
+
 let onlineToken=null,onlineDirty=false,onlineBusy=false,onlineRevision=0,onlineSaveAt=0,onlineErrorAt=0;
 let onlinePendingEvents=[];
+let specialServerBusy=false;
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function serverCall(method,...args){return new Promise((resolve,reject)=>{
   if(!ONLINE)return reject(Error('Not connected to Apps Script'));
   const runner=google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
   runner[method](...args);
 });}
 function makeHistoryId(){return 'ev_'+now()+'_'+Math.random().toString(36).slice(2,12);}
-function queueOnlineSave(){if(!ONLINE||!onlineToken)return;onlineDirty=true;}
+let onlineSaveTimer=null;
+function queueOnlineSave(){if(!ONLINE||!onlineToken)return;onlineDirty=true;setSaveState('pending','● Saving to Google Sheets…');clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},1600);}
 async function flushOnline(){
- if(!ONLINE||!onlineToken||!state||!onlineDirty||onlineBusy)return;
+ if(!ONLINE||!onlineToken||!state)return false;
+ if(onlineBusy)return false;
+ if(!onlineDirty)return true;
  onlineBusy=true;onlineDirty=false;
  const token=onlineToken,events=onlinePendingEvents.slice(0,50);
  const copy=JSON.parse(JSON.stringify(state));
@@ -144,21 +316,29 @@ async function flushOnline(){
  const rev=onlineRevision;
  try{
   const response=await serverCall('studentSave',token,JSON.stringify(copy),events,rev);
-  if(response?.conflict){onlineDirty=true;toast('Another device changed this account. Log in again to avoid losing progress.',true);return;}
+  if(response?.conflict){onlineDirty=true;setSaveState('error','⚠ Save conflict — log in again');toast('Another device changed this account. Log in again to avoid losing progress.',true);return false;}
   onlineRevision=response.revision;
   onlinePendingEvents=onlinePendingEvents.filter(x=>!events.includes(x));
   // Never discard pending events that were not included in the current server batch.
   if(onlinePendingEvents.length)onlineDirty=true;
-  onlineSaveAt=now();
- }catch(err){onlineDirty=true;if(now()-onlineErrorAt>10000){toast('Online save failed. Check your connection.',true);onlineErrorAt=now();}}
+  onlineSaveAt=now();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Saved to Google Sheets');if(onlineDirty){clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},700);}return true;
+ }catch(err){onlineDirty=true;setSaveState('error','⚠ Save not synced');if(now()-onlineErrorAt>10000){toast('Online save failed. Check your connection.',true);onlineErrorAt=now();}return false;}
  finally{onlineBusy=false;}
+}
+async function syncBeforeMagicTransaction(){
+ if(!ONLINE)return true;
+ // Wait for any auto-save in flight before sending a revision-sensitive request.
+ for(let tries=0;onlineBusy&&tries<50;tries++)await delay(100);
+ if(onlineBusy){toast('Progress is still syncing. Try again.',true);return false;}
+ if(onlineDirty&&!(await flushOnline())){toast('Cannot confirm your progress with Google Sheets. No purchase or reveal was made.',true);return false;}
+ return !onlineDirty;
 }
 const ACTION_ENTER_MS = 240;
 const ACTION_EXIT_MS = 300;
 function beginTimedAction(kind,onComplete,plotIndex=null){
  if(actionMotion)return;
  closeModal();player.moving=false;path=[];autoAction=null;keys.clear();touchDirs.clear();
- const text=({plant:'Planting · Đang gieo hạt',water:'Watering · Đang tưới cây',tend:'Tending · Đang chăm sóc',fertilize:'Fertilizing · Đang bón phân',harvest:'Harvesting · Đang thu hoạch'})[kind]||kind;
+ const text=({plant:'Planting · Đang gieo hạt',water:'Watering · Đang tưới cây',tend:'Tending · Đang chăm sóc',fertilize:'Fertilizing · Đang bón phân',give_milk:'Giving milk · Cho uống sữa',feed_meal:'Feeding a meal · Cho ăn',harvest:'Harvesting · Đang thu hoạch'})[kind]||kind;
  const plot=plotIndex===null?null:CROP_PLOT(plotIndex);
  const center=plot?{x:plot.x+plot.width/2,y:plot.y+plot.height/2+7}:{x:player.x,y:player.y};
  const exit=plot?nearestValid({x:center.x,y:plot.y+plot.height+28}):{...center};
@@ -199,18 +379,47 @@ function loadBank(){
   try{let custom=JSON.parse(localStorage.getItem(BANK_KEY)||'[]');if(Array.isArray(custom))bank=[...SAMPLE_WORDS,...custom.filter(w=>w&&w.english&&w.meaning&&w.pos)];}catch(e){console.warn('Unable to read local vocabulary:',e);}
 }
 function newProfile(slot){return {
-  version:2,id:slot,name:`Student ${slot}`,gold:30,level:1,xp:0,xpTotal:0,
+  version:2,saveSchemaVersion:1,id:slot,name:`Student ${slot}`,gold:30,level:1,xp:0,xpTotal:0,
   seeds:{carrot:2},harvest:{},plots:MAP.farm.plots.map((p,i)=>({unlocked:i<2,crop:null})),
+  companions:[],discovered:[],fences:[],fenceStock:0,decorations:[],decorStock:{},specialSeedLastPurchase:'',
   orders:[],ordersExpire:0,lastWords:[],history:[],sales:[],badges:[],
   daily:{day:dateKey(),answers:{},correct:0},weekly:{week:weekKey(),answers:{},correct:0},
   position:{x:880,y:495}, settings:{fastDemo:false}, savedAt:now()
 };}
 function readProfile(slot){
-  try{let saved=JSON.parse(localStorage.getItem(STORAGE_PREFIX+slot)||'null');if(saved&&saved.id===slot&&saved.version===2&&Array.isArray(saved.plots)&&saved.plots.length===10){delete saved.landTax;return saved;}}
-  catch(e){console.error('Invalid save file:',e)}
-  return newProfile(slot);
+ const raw=localStorage.getItem(STORAGE_PREFIX+slot);
+ if(raw===null)return newProfile(slot);
+ try{const saved=JSON.parse(raw),profile=VFIRecovery.migrateProfile(saved,newProfile(slot),slot);
+  const unknown=profile.plots.find(p=>p.crop&&p.crop.type!=='special'&&!CROPS[p.crop.type]);
+  if(unknown)throw Error('This profile contains a crop type unavailable in this game version. Use a compatible game build or recovery.');
+  return profile;}
+ catch(e){throw Error('Existing save was NOT reset. Open Backup & Recovery: '+e.message);}
 }
-function save(){if(!state)return;state.position={x:Math.round(player.x),y:Math.round(player.y)};state.savedAt=now();if(ONLINE){queueOnlineSave();return;}try{localStorage.setItem(STORAGE_PREFIX+state.id,JSON.stringify(state));}catch(e){toast('Browser storage is full. Please try another browser or back up this profile.',true)}}
+function setSaveState(kind,message){
+ const badge=$('saveStatus');if(!badge)return;
+ badge.dataset.state=kind;badge.textContent=message;
+ badge.title=ONLINE?message:kind==='saved'?'Saved on this device — NOT synced to Google Sheets. Download a recovery file for off-device protection.':message;
+}
+async function makeSafeSnapshot(reason='automatic',force=false){
+ if(!state||backupRunning||(!force&&now()-lastBackupAt<BACKUP_EVERY_MS))return;
+ backupRunning=true;const current=JSON.parse(JSON.stringify(state));
+ try{
+  const response=await VFIRecovery.snapshot(current,reason);
+  if(response.ok){lastBackupAt=now();setSaveState('backed','✓ Saved locally · backup available');}
+  else setSaveState('warning','Saved locally · backup unavailable');
+ }catch(err){setSaveState('warning','Saved locally · backup unavailable');}
+ finally{backupRunning=false;}
+}
+function save(){
+ if(!state)return;
+ state.position={x:Math.round(player.x),y:Math.round(player.y)};state.savedAt=now();state.saveSchemaVersion=1;
+ if(ONLINE){queueOnlineSave();return;}
+ try{
+  localStorage.setItem(STORAGE_PREFIX+state.id,JSON.stringify(state));
+  setSaveState(lastBackupAt?'backed':'saved',lastBackupAt?'✓ Saved locally · backup available':'✓ Saved on this device');
+  if(!backupRunning&&now()-lastBackupAt>BACKUP_EVERY_MS)void makeSafeSnapshot('periodic');
+ }catch(e){setSaveState('error','⚠ Save failed');if(now()-lastSaveErrorAt>15000){lastSaveErrorAt=now();toast('Local storage is full. Your latest progress may not be saved. Download a recovery file.',true);}}
+}
 function syncDaily(){
  if(!state)return false;
  let changed=false;
@@ -236,19 +445,25 @@ function chooseWord(){if(ONLINE&&!bank.length)return null;const recent=new Set(s
  return bank[0].id;
 }
 function wordById(id){return bank.find(w=>w.id===id)||SAMPLE_WORDS.find(w=>w.id===id)||SAMPLE_WORDS[0]}
-function logAnswer(word,source,stage,answer,correct,attempt){state.history.push({time:now(),source,stage,wordId:word.id,word:word.english,answer,expected:word.meaning,correct,attempt});if(state.history.length>3000)state.history=state.history.slice(-3000);checkBadges()}
+function logAnswer(word,source,stage,answer,correct,attempt){const entry={eventId:makeHistoryId(),time:now(),source,stage,wordId:word.id,word:word.english,answer,expected:word.meaning,correct,attempt};state.history.push(entry);if(state.history.length>3000)state.history=state.history.slice(-3000);void VFIRecovery.archiveAttempt(state.id,entry);checkBadges()}
 
 function loadImage(path){if(images[path])return images[path];const i=new Image();images[path]=i;i.src=path;i.onload=()=>{assetsLoading++;};i.onerror=()=>{console.warn('Missing image',path)};return i;}
 function asset(path){return loadImage(path)}
 function drawImage(ctx,path,x,y,w,h){const im=asset(path);if(im.complete&&im.naturalWidth>0)ctx.drawImage(im,x,y,w,h)}
 function preload(){const paths=[MAP.layers.background,...MAP.layers.buildings.map(b=>b.asset),...MAP.foreground_overlays.map(o=>o.asset),
- ...['girl_walk_down','girl_walk_up','girl_walk_left','girl_walk_right','girl_idle_4dir','girl_plant','girl_water','girl_tend','girl_fertilize','girl_harvest'].map(s=>`assets/characters/girl/${s}.png`),
+ ...['girl_walk_down','girl_walk_up','girl_walk_left','girl_walk_right','girl_idle_4dir','girl_plant','girl_water','girl_tend','girl_fertilize','girl_give_milk','girl_feed_meal','girl_harvest'].map(s=>`assets/characters/girl/${s}.png`),
  ...['plot_tilled','plot_seeded','plot_watered','plot_fertilized','plot_locked'].map(s=>`assets/plots/${s}.png`),
- ...CROP_DATA.flatMap(c=>STAGES.map((v,i)=>`assets/crops/${c.id}/${c.id}_0${i}_${v}.png`))];paths.forEach(loadImage);}
+ ...CROP_DATA.flatMap(c=>STAGES.map((v,i)=>`assets/crops/${c.id}/${c.id}_0${i}_${v}.png`)),
+ specialSeedArt,specialSeedShopArt,'assets/fences/fence_horizontal.png','assets/fences/fence_vertical.png',
+ ...DECOR_ITEMS.map(decorArt),
+ ...CHARACTER_DATA.flatMap(c=>[
+  ...[1,2,3,4].map((n)=>companionArt(c.id,'growth',`0${n}_${['','newborn','baby','young','final'][n]}`)),
+  ...['down','up','left','right'].flatMap(d=>[companionArt(c.id,'sheets',`walk_${d}`),companionArt(c.id,'idle',`idle_${d}`)])
+ ]),...['growth_transformation','harvest_celebration','happy_reaction','pet_selection_ring'].map(effectPath)];paths.forEach(loadImage);}
 
 const canvas=$('gameCanvas');const ctx=canvas.getContext('2d',{alpha:false});
 function resize(){const rc=canvas.getBoundingClientRect();viewW=Math.max(1,rc.width);viewH=Math.max(1,rc.height);dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(viewW*dpr);canvas.height=Math.round(viewH*dpr);
- const base=clamp(viewW/1450,.72,1.13);
+ const base=viewW<=720?clamp(viewW/390,1.00,1.18):clamp(viewW/1450,.72,1.13);
  zoom=zoomPreference===null?Math.min(base,viewH<580?.84:base):clamp(zoomPreference,mapFitZoom(),2.3);
  updateZoomLabel();}
 function mapFitZoom(){return Math.min(viewW/MAP.world.width,viewH/MAP.world.height);}
@@ -278,7 +493,7 @@ function walkable(x,y){if(x<15||y<15||x>MAP.world.width-15||y>MAP.world.height-1
  return !blocks.some(([bx,by,bw,bh])=>x>bx&&x<bx+bw&&y>by&&y<by+bh);
 }
 function canStand(x,y){return [[-7,0],[7,0],[0,-4],[0,5]].every(([dx,dy])=>walkable(x+dx,y+dy));}
-function nearestValid(pos){if(canStand(pos.x,pos.y))return pos;for(let r=16;r<=160;r+=16)for(let a=0;a<16;a++){const t=2*Math.PI*a/16,p={x:pos.x+Math.cos(t)*r,y:pos.y+Math.sin(t)*r};if(canStand(p.x,p.y))return p;}return {x:880,y:495};}
+function nearestValid(pos){if(canPlayerStand(pos.x,pos.y))return pos;for(let r=16;r<=160;r+=16)for(let a=0;a<16;a++){const t=2*Math.PI*a/16,p={x:pos.x+Math.cos(t)*r,y:pos.y+Math.sin(t)*r};if(canPlayerStand(p.x,p.y))return p;}return {x:880,y:495};}
 const cellSize=24;
 function toCell(v){return Math.floor(v/cellSize)};
 function cellPoint(cx,cy){return {x:cx*cellSize+cellSize/2,y:cy*cellSize+cellSize/2}};
@@ -287,13 +502,13 @@ function pathfind(start,end){const dest=nearestValid(end);const cols=Math.ceil(M
  const startN=sy*cols+sx,goalN=gy*cols+gx;let open=[{id:startN,x:sx,y:sy,g:0,f:0}],best=new Map([[startN,0]]),parents=new Map(),closed=new Set();const steps=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];let max=8000;
  while(open.length&&max-->0){let bi=0;for(let i=1;i<open.length;i++)if(open[i].f<open[bi].f)bi=i;let cur=open.splice(bi,1)[0];if(closed.has(cur.id))continue;
  if(cur.id===goalN){let out=[dest];let id=goalN;while(id!==startN){const x=id%cols,y=Math.floor(id/cols);out.push(cellPoint(x,y));id=parents.get(id);if(id===undefined)break;}out.reverse();return compressPath(out);}
- closed.add(cur.id);for(const [dx,dy] of steps){const nx=cur.x+dx,ny=cur.y+dy;if(nx<0||ny<0||nx>=cols||ny>=rows)continue;const id=ny*cols+nx;if(closed.has(id))continue;const np=cellPoint(nx,ny);if(!canStand(np.x,np.y))continue;
- if(dx&&dy){const p1=cellPoint(cur.x+dx,cur.y),p2=cellPoint(cur.x,cur.y+dy);if(!canStand(p1.x,p1.y)||!canStand(p2.x,p2.y))continue;}
+ closed.add(cur.id);for(const [dx,dy] of steps){const nx=cur.x+dx,ny=cur.y+dy;if(nx<0||ny<0||nx>=cols||ny>=rows)continue;const id=ny*cols+nx;if(closed.has(id))continue;const np=cellPoint(nx,ny);if(!canPlayerStand(np.x,np.y))continue;
+ if(dx&&dy){const p1=cellPoint(cur.x+dx,cur.y),p2=cellPoint(cur.x,cur.y+dy);if(!canPlayerStand(p1.x,p1.y)||!canPlayerStand(p2.x,p2.y))continue;}
  const g=cur.g+(dx&&dy?1.414:1);if(g>=(best.get(id)??Infinity))continue;best.set(id,g);parents.set(id,cur.id);const h=Math.hypot(nx-gx,ny-gy);open.push({id,x:nx,y:ny,g,f:g+h*1.04});}
  }
  return null;
 }
-function lineClear(a,b){const steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/12);for(let i=1;i<steps;i++){const p={x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps};if(!canStand(p.x,p.y))return false;}return true}
+function lineClear(a,b){const steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/12);for(let i=1;i<steps;i++){const p={x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps};if(!canPlayerStand(p.x,p.y))return false;}return true}
 function compressPath(points){if(points.length<2)return points;const out=[points[0]];let from=0;while(from<points.length-1){let until=from+1;for(let j=from+2;j<points.length;j++){if(lineClear(points[from],points[j]))until=j;else break;}out.push(points[until]);from=until;}return out.slice(1)}
 function goTo(pos,onArrival){if(!playing)return;const target=nearestValid(pos);const start={x:player.x,y:player.y};let route=null;
  // Guide travel across the wooden bridge instead of diagonally stepping onto water.
@@ -336,11 +551,11 @@ function updateMovement(dt){if(actionMotion)return;let vx=0,vy=0;const dirs=new 
  else{vx=dx/dist;vy=dy/dist;speed=630;}}
  player.moving=!!(vx||vy);
  if(player.moving){if(Math.abs(vx)>Math.abs(vy))player.dir=vx>0?'right':'left';else player.dir=vy>0?'down':'up';const nx=player.x+vx*speed*dt,ny=player.y+vy*speed*dt;
- if(canStand(nx,ny)){player.x=nx;player.y=ny;}else{if(canStand(nx,player.y))player.x=nx;else if(canStand(player.x,ny))player.y=ny;else if(path.length){path=[];autoAction=null;}}player.animMs+=dt*1000;player.frame=Math.floor(player.animMs/130)%4;}
+ if(canPlayerStand(nx,ny)){player.x=nx;player.y=ny;}else{if(canPlayerStand(nx,player.y))player.x=nx;else if(canPlayerStand(player.x,ny))player.y=ny;else if(path.length){path=[];autoAction=null;}}player.animMs+=dt*1000;player.frame=Math.floor(player.animMs/130)%4;}
  else{player.animMs=0;player.frame=0;}
 }
 function isDue(crop){return crop&&now()>=crop.nextDueAt}
-function cropStage(crop){if(!crop)return 0;return crop.stage===3&&isDue(crop)?4:crop.stage}
+function cropStage(crop){if(!crop)return 0;if(crop.type==='special')return crop.stage;return crop.stage===3&&isDue(crop)?4:crop.stage}
 function renderWorld(){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#2698e0';ctx.fillRect(0,0,viewW,viewH);
  const targetX=player.x-viewW/(2*zoom),targetY=player.y-viewH/(2*zoom);
  const visibleW=viewW/zoom,visibleH=viewH/zoom;
@@ -354,10 +569,17 @@ function renderWorld(){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#2698e0'
  // All ten plot locations remain in a single 5 × 2 block.
  MAP.farm.plots.forEach((p,i)=>{const plot=state.plots[i];let s=plot.unlocked?'plot_tilled':'plot_locked';if(plot.crop){s=plot.crop.stage===0?'plot_seeded':plot.crop.stage===1?'plot_watered':'plot_fertilized'}
  drawImage(ctx,`assets/plots/${s}.png`,p.x,p.y,p.width,p.height);
- if(plot.crop){const c=plot.crop;const stage=cropStage(c);drawImage(ctx,`assets/crops/${c.type}/${c.type}_0${stage}_${STAGES[stage]}.png`,p.x+p.width/2-32,p.y-6,64,64);
- if(isDue(c)){drawWorldMarker(p.x+p.width/2,p.y-12,'!',true);}else drawWorldMarker(p.x+p.width/2,p.y-10,formatSeconds(c.nextDueAt-now()),false);}
+ if(plot.crop){const c=plot.crop;const stage=c.type==='special'?c.stage:cropStage(c);
+ if(c.type==='special'){
+   drawImage(ctx,specialGrowthArt(c),p.x+p.width/2-32,p.y-6,64,64);
+   if(c.stage>=1&&c.rarity){ctx.save();ctx.font='900 16px Trebuchet MS';ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='#51311b';ctx.fillStyle=c.rarity===3?'#ffe169':c.rarity===2?'#99d5ff':'#fff9dc';const stars=companionStars(c.rarity);ctx.strokeText(stars,p.x+p.width/2,p.y-14);ctx.fillText(stars,p.x+p.width/2,p.y-14);ctx.restore();}
+ }
+ else drawImage(ctx,`assets/crops/${c.type}/${c.type}_0${stage}_${STAGES[stage]}.png`,p.x+p.width/2-32,p.y-6,64,64);
+ const markerY=c.type==='special'&&c.stage>=1&&c.rarity?p.y-48:p.y-12;
+ if(isDue(c)){drawWorldMarker(p.x+p.width/2,markerY,'!',true);}else drawWorldMarker(p.x+p.width/2,markerY,formatSeconds(c.nextDueAt-now()),false);}
  else if(!plot.unlocked){ctx.font='900 12px Trebuchet MS';ctx.textAlign='center';ctx.fillStyle='#fff8d5';ctx.strokeStyle='#6b4d29';ctx.lineWidth=3;ctx.strokeText(String(i+1),p.x+p.width/2,p.y+51);ctx.fillText(String(i+1),p.x+p.width/2,p.y+51);}
  });
+ drawFences();drawDecorations();drawCompanions();drawEffects();
  // Player with consistent 64x64 sprites, foot anchor at y=59.
  const working=actionMotion?.phase==='work';const stepping=actionMotion&&!working;
  const sheet=working?`girl_${actionMotion.kind}`:((stepping||player.moving)?`girl_walk_${player.dir}`:'girl_idle_4dir');const sprite=asset(`assets/characters/girl/${sheet}.png`);
@@ -397,11 +619,17 @@ function toast(msg,bad=false){const el=document.createElement('div');el.classNam
 
 // --------------------------- Interface ---------------------------
 function openModal(title,html,kicker='VOCAB FARM ISLAND',id='generic'){
- activeModal=id;$('modalPanel').dataset.mode=id;$('modalTitle').textContent=title;$('modalEyebrow').textContent=kicker;$('modalBody').innerHTML=html;
- $('modalOverlay').classList.remove('hidden');$('modalPanel').scrollTop=0;$('modalBody').scrollTop=0;keys.clear();touchDirs.clear();path=[];autoAction=null;
- $('modalClose').focus({preventScroll:true});
+ const preserveScroll=(id==='shop'||id==='decor-shop') && activeModal===id && !$('modalOverlay').classList.contains('hidden');
+ const bodyScroll=preserveScroll?$('modalBody').scrollTop:0;
+ const panelScroll=preserveScroll?$('modalPanel').scrollTop:0;
+ activeModal=id;$('modalPanel').dataset.mode=id;$('modalPanel').dataset.ready='false';$('modalTitle').textContent=title;$('modalEyebrow').textContent=kicker;$('modalBody').innerHTML=html;
+ $('modalOverlay').classList.remove('hidden');$('modalPanel').scrollTop=preserveScroll?panelScroll:0;$('modalBody').scrollTop=preserveScroll?bodyScroll:0;keys.clear();touchDirs.clear();path=[];autoAction=null;
+ if(id==='plant-exposure'){$('modalPanel').focus({preventScroll:true});}else{$('modalClose').focus({preventScroll:true});}
 }
-function closeModal(){if($('modalOverlay').classList.contains('hidden'))return;$('modalOverlay').classList.add('hidden');activeModal='';qContext=null;$('gameCanvas').focus({preventScroll:true});}
+function closeModal(){if(activeModal==='plant-exposure'&&now()<plantReadUntil)return;
+ if(plantReadTicker){clearInterval(plantReadTicker);plantReadTicker=null;}
+ plantReadUntil=0;
+ if($('modalOverlay').classList.contains('hidden'))return;$('modalOverlay').classList.add('hidden');activeModal='';qContext=null;$('gameCanvas').focus({preventScroll:true});}
 // Tap-to-play pronunciation uses the device's Web Speech voices, not the IPA glyphs.
 // en-GB is requested; if no UK voice is installed, we cannot guarantee the accent.
 function speakVocabularyWord(word){
@@ -422,16 +650,183 @@ function wordCard(w,status='neutral'){
  const marker=status==='correct'?'<span class="mark-good">✓ </span>':status==='incorrect'?'<span class="mark-bad">× </span>':'';
  return `<div class="word-card"><div class="word-line">${marker}<strong>${escapeHTML(w.english)}</strong><button class="speak-word" type="button" data-pronounce="${escapeHTML(w.english)}" aria-label="Play British pronunciation of ${escapeHTML(w.english)}" title="Listen · Nghe phát âm Anh-Anh">🔊</button> <span class="word-ipa">${escapeHTML(w.ipa)} (${escapeHTML(w.pos)})</span>: <strong>${escapeHTML(w.meaning)}</strong></div><div class="example"><strong>Ví dụ:</strong> ${escapeHTML(w.example)}</div></div>`;
 }
+function showPlantVocabulary(word,nextLabel){
+ if(plantReadTicker){clearInterval(plantReadTicker);plantReadTicker=null;}
+ plantReadUntil=now()+8000;
+ const markup=`<div class="plant-reading-top"><strong>Read and learn · Đọc và học</strong><span class="plant-reading-clock" id="plantReadingClock" role="timer" aria-label="Minimum reading time remaining">0:08</span></div>${wordCard(word,'neutral')}<div class="timer-block plant-reading-next">${escapeHTML(nextLabel)}</div><p id="plantReadingReady" class="plant-reading-ready" role="status" aria-live="polite"></p>`;
+ openModal('Vocabulary · Từ vựng',markup,'8 SECONDS TO READ · 8 GIÂY ĐỂ ĐỌC','plant-exposure');
+ const update=()=>{
+  if(activeModal!=='plant-exposure'){clearInterval(plantReadTicker);plantReadTicker=null;plantReadUntil=0;return;}
+  const remaining=Math.max(0,Math.ceil((plantReadUntil-now())/1000));
+  const counter=$('plantReadingClock');if(counter)counter.textContent='0:'+String(remaining).padStart(2,'0');
+  if(remaining===0){
+   // Do not dismiss the vocabulary card. Unlock its X only after the eight-second study period.
+   plantReadUntil=0;
+   clearInterval(plantReadTicker);plantReadTicker=null;
+   $('modalPanel').dataset.ready='true';
+   $('modalClose').setAttribute('aria-label','Close vocabulary window');
+   const note=$('plantReadingReady');
+   if(note)note.textContent='Take your time. Close when ready.';
+  }
+ };
+ update();plantReadTicker=setInterval(update,80);
+}
 function showShop(){const content=`<div class="shop-intro">${img('assets/ui/shop/shopkeeper/shopkeeper_portrait_128.png')}<div><div class="shop-gold">${goldIconHTML()} <strong>${state.gold} gold</strong></div></div></div>
  <div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><span class="price">${goldIconHTML()} ${c.seed}</span><span class="subtext">${c.mins} min · Sell ${c.sale}</span>${state.level<c.level?`<span class="tag danger">Level ${c.level}</span>`:`<button class="primary-btn" data-do="buy" data-crop="${c.id}" ${state.gold<c.seed?'disabled':''}>Buy</button>`}<small>Owned: ${state.seeds[c.id]||0}</small></div>`).join('')}</div>
- <div class="button-row"><button class="secondary-btn" data-do="inventory">Inventory</button>${canRescue()?'<button class="primary-btn" data-do="rescue">Free carrot seed</button>':''}</div>`;
+ <h3 class="section-heading">Magical companions & fences</h3><div class="card-grid"><div class="item-card">${img(specialSeedShopArt)}<strong>Special Seed</strong><span class="price">${goldIconHTML()} ${SPECIAL_SEED.seed}</span><small>${devSettings.unlimitedSeeds?'DEVELOPER TEST: Unlimited daily purchases':'Unlock Lv 5 · Limit 1 each Vietnam day'}</small><small>Owned: ${state.seeds.special||0}</small><button class="primary-btn" data-do="buy-special" ${canBuySpecial()?'':'disabled'}>${state.level<5?'Unlock at Lv 5':!devSettings.unlimitedSeeds&&state.specialSeedLastPurchase===dateKey()?'Bought today':'Buy 1'}</button></div><div class="item-card">${img('assets/fences/fence_horizontal.png')}<strong>Wooden Fence</strong><span class="price">${goldIconHTML()} ${FENCE_PRICE}</span><small>Rotate: horizontal / vertical</small><small>Owned: ${state.fenceStock}</small><button class="primary-btn" data-do="buy-fence" ${state.gold<FENCE_PRICE?'disabled':''}>Buy 1</button></div></div>
+ <div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decorations & packs</button><button class="secondary-btn" data-do="inventory">Inventory</button>${canRescue()?'<button class="primary-btn" data-do="rescue">Free carrot seed</button>':''}</div>`;
  openModal('Seed Shop',content,'','shop');}
+function showDecorationShop(){
+ const packCards=DECOR_PACKS.map(pack=>{
+  const entries=DECOR_ITEMS.filter(item=>item.pack===pack.id),sum=entries.reduce((n,item)=>n+item.price,0);
+  const icons=entries.map(item=>`<img src="${decorArt(item)}" alt="${escapeHTML(item.name)}">`).join('');
+  return `<div class="decor-pack-card"><div class="decor-pack-icons">${icons}</div><strong>${pack.name}</strong><small>${pack.description}</small><span class="price">${goldIconHTML()} ${pack.price} <s>${sum}</s></span><button class="primary-btn" data-do="buy-decor-pack" data-pack="${pack.id}" ${state.gold<pack.price?'disabled':''}>Buy pack</button></div>`;
+ }).join('');
+ const items=DECOR_SHOP_ITEMS.map(item=>`<div class="item-card decor-shop-item">${img(decorArt(item))}<strong>${escapeHTML(item.name)}</strong><small>${DECOR_PACKS.find(p=>p.id===item.pack).name}</small><span class="price">${goldIconHTML()} ${item.price}</span><small>In bag: ${state.decorStock[item.id]||0}</small><button class="primary-btn" data-do="buy-decor" data-item="${item.id}" ${state.gold<item.price?'disabled':''}>Buy 1</button></div>`).join('');
+ openModal('Island Decorations',`<div class="shop-intro"><div class="decor-shop-icon">🌺</div><div><strong>Decorate your island</strong><div class="shop-gold">${goldIconHTML()} ${state.gold} gold</div></div></div><h3 class="section-heading">Themed decoration packs</h3><div class="decor-pack-grid">${packCards}</div><h3 class="section-heading">Individual decorations</h3><div class="card-grid">${items}</div><div class="button-row"><button class="secondary-btn" data-do="inventory">🎒 Bag & placement</button><button class="secondary-btn" data-do="shop">🌱 Seeds & fences</button></div>`,'DECORATION SHOP','decor-shop');
+}
+function buyDecoration(id){
+ const item=DECOR_BY_ID[id];if(!item||RETIRED_DECOR_IDS.has(id))return toast('This decoration is no longer sold.',true);if(state.gold<item.price)return toast('Not enough gold.',true);
+ state.gold-=item.price;state.decorStock[id]=(state.decorStock[id]||0)+1;save();updateHUD();showDecorationShop();toast(`${item.name} added to your bag!`);
+}
+function buyDecorationPack(id){
+ const pack=DECOR_PACKS.find(p=>p.id===id);if(!pack||state.gold<pack.price)return toast('Not enough gold.',true);
+ state.gold-=pack.price;for(const item of DECOR_ITEMS.filter(i=>i.pack===id))state.decorStock[item.id]=(state.decorStock[item.id]||0)+1;
+ save();updateHUD();showDecorationShop();toast(`${pack.name} added: four decorations!`);
+}
+
+async function buySpecialSeed(){
+ if(specialServerBusy)return;
+ if(!canBuySpecial()){toast('Level 5 and 300 gold are required (daily limit may be enabled in Dev Tools).',true);return;}
+ if(ONLINE){
+  specialServerBusy=true;
+  try{
+   if(!(await syncBeforeMagicTransaction()))return;
+   const result=await serverCall('studentSpecialBuy',onlineToken,onlineRevision);
+   if(result?.conflict){onlineDirty=true;toast('Progress changed on another device. Log in again before buying.',true);return;}
+   if(!result?.ok)throw Error('Purchase was not confirmed.');
+   onlineRevision=result.revision;
+   state.gold=result.gold;state.seeds.special=result.specialSeeds;state.specialSeedLastPurchase=result.day;
+   save();updateHUD();showShop();toast('Purchased your one Special Seed for today!');
+  }catch(err){toast('Special Seed purchase not confirmed: '+(err?.message||err),true);}
+  finally{specialServerBusy=false;}
+  return;
+ }
+ state.gold-=SPECIAL_SEED.seed;state.seeds.special++;if(!devSettings.unlimitedSeeds)state.specialSeedLastPurchase=dateKey();save();updateHUD();showShop();toast('Developer test purchase: +1 Special Seed!');
+}
+function buyFence(){if(state.gold<FENCE_PRICE)return;state.gold-=FENCE_PRICE;state.fenceStock++;save();updateHUD();showShop();}
 function canRescue(){const seeds=Object.values(state.seeds).reduce((a,b)=>a+b,0),harvest=Object.values(state.harvest).reduce((a,b)=>a+b,0),growing=state.plots.some(p=>p.crop);return state.gold<CROPS.carrot.seed&&seeds===0&&harvest===0&&!growing;}
 function buySeed(id){const c=CROPS[id];if(!c||state.level<c.level||state.gold<c.seed){toast('Not enough gold or level to buy this seed.',true);return;}state.gold-=c.seed;state.seeds[id]=(state.seeds[id]||0)+1;save();updateHUD();toast(`Purchased 1 ${c.name} seed!`);showShop()}
 function getRescue(){if(!canRescue()){toast('Emergency seed is only available when you cannot continue farming.');return;}state.seeds.carrot=1;save();toast('One free carrot seed is ready!');showShop()}
+function showDevTools(){
+ if(!state)return;
+ const planted=state.plots.filter(p=>p.crop).length;
+ const content=`<div class="dev-test-hint"><strong>OFFLINE DEV EDITION</strong><p>Only this browser's developer-test saves are changed. No Google Sheets sync, no real student accounts.</p></div>
+  <div class="stat-strip"><span class="stat-chip">Lv ${state.level}</span><span class="stat-chip">${goldIconHTML()} ${state.gold.toLocaleString('en-US')} gold</span><span class="stat-chip">✨ ${state.seeds.special||0} Special Seeds</span><span class="stat-chip">🌱 ${planted} growing plots</span></div>
+  <h3 class="section-heading">Quick test resources</h3><div class="dev-tool-grid">
+   <button class="primary-btn" data-do="dev-level">★ Set Level 5+</button>
+   <button class="primary-btn" data-do="dev-gold">${goldIconHTML()} Add 100,000 gold</button>
+   <button class="primary-btn" data-do="dev-seeds">✨ Add 10 Special Seeds</button>
+   <button class="primary-btn" data-do="dev-fences">🪵 Add 20 fences</button>
+   <button class="secondary-btn" data-do="dev-plots">🌱 Unlock all 10 plots</button>
+   <button class="secondary-btn" data-do="dev-ready">⚡ Make growing plots ready</button>
+  </div>
+  <h3 class="section-heading">Testing rules</h3>
+  <div class="dev-toggle-row"><div><strong>Fast growth</strong><small>1 second between crop care stages, questions still required.</small></div><button class="${devSettings.fastGrowth?'primary-btn':'secondary-btn'}" data-do="dev-fast">${devSettings.fastGrowth?'ON':'OFF'}</button></div>
+  <div class="dev-toggle-row"><div><strong>Unlimited Special Seed purchases</strong><small>Ignores the daily buy limit only in this offline build.</small></div><button class="${devSettings.unlimitedSeeds?'primary-btn':'secondary-btn'}" data-do="dev-limit">${devSettings.unlimitedSeeds?'ON':'OFF'}</button></div>
+  <div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Open Seed Shop</button><button class="secondary-btn" data-do="inventory">🎒 Inventory</button></div>
+  <div class="button-row">${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}<button class="danger-btn" data-do="dev-reset">Reset this developer profile</button></div>
+  <p class="fine-print">Reset deletes only the current developer test profile. Other saves and live classroom data are not touched. Changes to timer rules affect new stages; use “Make growing plots ready” to speed up existing ones.</p>`;
+ openModal('Developer Test Tools',content,'LOCAL ONLY • SAFE TEST PROFILE','developer');
+}
+function devAction(action){if(ONLINE)return;
+ if(!state)return;
+ switch(action){
+  case 'dev-level':state.level=Math.max(5,Number(state.level)||1);break;
+  case 'dev-gold':state.gold=Math.min(999999999,state.gold+100000);break;
+  case 'dev-seeds':state.seeds.special=(state.seeds.special||0)+10;break;
+  case 'dev-fences':state.fenceStock=(state.fenceStock||0)+20;break;
+  case 'dev-plots':state.plots.forEach(p=>p.unlocked=true);break;
+  case 'dev-ready':state.plots.forEach(p=>{if(p.crop){p.crop.nextDueAt=now()-1000;p.crop.retryAfter=0;}});break;
+  case 'dev-fast':devSettings.fastGrowth=!devSettings.fastGrowth;storeDeveloperSettings();break;
+  case 'dev-limit':devSettings.unlimitedSeeds=!devSettings.unlimitedSeeds;storeDeveloperSettings();break;
+  case 'dev-reset':
+   if(!window.confirm('Reset only this developer test profile? All locally collected companions and test progress for this profile will be lost.'))return;
+   state=newProfile(state.id);ensureCompanionState();player.x=880;player.y=495;clearPendingPetTap();petSpeech=null;magicEffects=[];setPlacementMode(null);break;
+ }
+ save();updateHUD();showDevTools();toast('Developer test setting applied.');
+}
+function decorResale(id){
+ const item=DECOR_BY_ID[id];return item?Math.floor(item.price*DECOR_SELL_RATE):0;
+}
+function showDecorSellConfirm(id){
+ const item=DECOR_BY_ID[id];if(!item||(state.decorStock[id]||0)<=0){showOwnedDecorations();return;}
+ const reward=decorResale(id);
+ openModal('Sell '+item.name,`<div class="plot-banner">${img(decorArt(item))}<div><h3>${escapeHTML(item.name)}</h3><p>Owned ×${state.decorStock[id]} · Purchase ${goldIconHTML()} ${item.price}</p></div></div><p class="muted">Sell one decoration from your Bag for ${goldIconHTML()} <strong>${reward} gold</strong> (75% of its individual shop price). This item will be removed from your inventory. Placed decorations must be returned to the Bag before sale.</p><div class="button-row"><button class="danger-btn" data-do="sell-decor-confirm" data-item="${escapeHTML(id)}">Confirm sale · +${reward} gold</button><button class="secondary-btn" data-do="owned-decorations">Cancel</button></div>`,'CONFIRM DECORATION SALE','decor-sale-confirm');
+}
+function sellDecoration(id){
+ const item=DECOR_BY_ID[id];if(!item||(state.decorStock[id]||0)<1)return;
+ const reward=decorResale(id);
+ state.decorStock[id]--;
+ state.gold+=reward;
+ state.sales=Array.isArray(state.sales)?state.sales:[];
+ state.sales.push({time:now(),type:'decor-sale',itemId:id,gold:reward});
+ state.sales=state.sales.slice(-500);
+ save();updateHUD();showOwnedDecorations();toast(`${item.name} sold for ${reward} gold.`);
+}
+function showFenceSellConfirm(){
+ if((state.fenceStock||0)<=0){showOwnedDecorations();return;}
+ const reward=Math.floor(FENCE_PRICE*DECOR_SELL_RATE);
+ openModal('Sell Wooden Fence',`<p>Sell one unplaced Wooden Fence for ${goldIconHTML()} <strong>${reward} gold</strong>? (Original purchase: ${FENCE_PRICE} gold.)</p><div class="button-row"><button class="danger-btn" data-do="sell-fence-confirm">Confirm sale · +${reward} gold</button><button class="secondary-btn" data-do="owned-decorations">Cancel</button></div>`,'CONFIRM FENCE SALE','fence-sale-confirm');
+}
+function sellFence(){
+ if((state.fenceStock||0)<1)return;
+ const reward=Math.floor(FENCE_PRICE*DECOR_SELL_RATE);
+ state.fenceStock--;state.gold+=reward;
+ state.sales=Array.isArray(state.sales)?state.sales:[];
+ state.sales.push({time:now(),type:'fence-sale',gold:reward});state.sales=state.sales.slice(-500);
+ save();updateHUD();showOwnedDecorations();toast(`Wooden Fence sold for ${reward} gold.`);
+}
 function showInventory(){const section=(kind,label,list)=>`<h3 class="section-heading">${label}</h3><div class="inventory-grid">${list.map(c=>`<div class="inventory-cell">${img(cropIcon(c.id,kind==='seed'?'seed':'harvested'))}<span>${escapeHTML(c.name)}</span><small>× ${kind==='seed'?(state.seeds[c.id]||0):(state.harvest[c.id]||0)}</small></div>`).join('')}</div>`;
- openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,'INVENTORY • SAVED IN THIS BROWSER','inventory');}
-function plotArt(i){const p=state.plots[i];if(!p.unlocked)return 'assets/plots/plot_locked.png';if(!p.crop)return 'assets/plots/plot_tilled.png';const stage=cropStage(p.crop);return `assets/crops/${p.crop.type}/${p.crop.type}_0${stage}_${STAGES[stage]}.png`;}
+ openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${state.seeds.special||0}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,'INVENTORY • SAVED IN THIS BROWSER','inventory');}
+// v0.24: Bottom shortcuts show purchased items, never the shops.
+// Keep these menus separate from the full Bag, which includes harvested crops.
+function showOwnedDecorations(){
+ const items=DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0);
+ const cards=items.map(item=>`<article class="owned-asset-card">${img(decorArt(item),'owned-asset-image',item.name)}<strong>${escapeHTML(item.name)}</strong><span class="owned-count">Owned ×${state.decorStock[item.id]}</span><div class="owned-asset-actions"><button class="primary-btn" type="button" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" type="button" data-do="sell-decor" data-item="${item.id}" aria-label="Sell ${escapeHTML(item.name)} for ${decorResale(item.id)} gold"><span class="sell-label">Sell</span><span class="sell-value">${goldIconHTML()} ${decorResale(item.id)}</span></button></div></article>`).join('');
+ const fences=state.fenceStock||0;
+ const fenceCard=fences>0?`<article class="owned-asset-card">${img('assets/fences/fence_horizontal.png','owned-asset-image','Wooden fence')}<strong>Wooden Fence</strong><span class="owned-count">Owned ×${fences}</span><div class="owned-asset-actions"><button class="primary-btn" type="button" data-do="place-fence">Place</button><button class="secondary-btn" type="button" data-do="sell-fence" aria-label="Sell Wooden Fence for ${Math.floor(FENCE_PRICE*DECOR_SELL_RATE)} gold"><span class="sell-label">Sell</span><span class="sell-value">${goldIconHTML()} ${Math.floor(FENCE_PRICE*DECOR_SELL_RATE)}</span></button></div></article>`:'';
+ const empty=`<div class="owned-empty">Your decoration inventory is empty. Purchased items will appear here.</div>`;
+ const guide=`<p class="inventory-guide inventory-guide-footer"><strong>How to decorate:</strong> Select a purchased decoration and tap an open space on the island to place it. Press and hold an item you’ve placed to move it or return it to your Bag. To sell an item, first return it to your inventory, then select <strong>“Sell”</strong> (you will receive 75% of its original price). Fences can be placed either horizontally or vertically.</p>`;
+ const content=`<div class="stat-strip"><span class="stat-chip">🌸 ${items.reduce((n,item)=>n+(state.decorStock[item.id]||0),0)} decorations ready</span><span class="stat-chip">🪵 ${fences} fences ready</span></div>
+  <div class="owned-asset-grid">${cards}${fenceCard}</div>${!items.length&&!fences?empty:''}
+  ${guide}`;
+ openModal('My Decorations',content,'OWNED ITEMS · NOT THE SHOP','owned-decorations');
+}
+function showOwnedSeeds(){
+ const items=CROP_DATA.filter(c=>(state.seeds[c.id]||0)>0);
+ const hasSpecial=(state.seeds.special||0)>0;
+ const available=state.plots.filter(p=>p.unlocked&&!p.crop).length;
+ const cards=items.map(c=>`<article class="owned-asset-card">${img(cropIcon(c.id,'seed'),'owned-asset-image',c.name)}<strong>${escapeHTML(c.name)}</strong><span class="owned-count">Owned ×${state.seeds[c.id]}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="${c.id}" ${available?'':'disabled'}>Choose plot</button></article>`).join('');
+ const special=hasSpecial?`<article class="owned-asset-card">${img(specialSeedArt,'owned-asset-image','Special Seed')}<strong>Special Seed</strong><span class="owned-count">Owned ×${state.seeds.special}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="special" ${available?'':'disabled'}>Choose plot</button></article>`:'';
+ const guide=`<p class="inventory-guide inventory-guide-footer"><strong>Your purchased seeds:</strong> Choose a seed, then select an empty, unlocked plot. You can also tap an empty plot directly on the island to plant a seed from your inventory.</p>`;
+ const content=`<div class="stat-strip"><span class="stat-chip">🌱 ${items.reduce((n,c)=>n+(state.seeds[c.id]||0),0)+(state.seeds.special||0)} seeds owned</span><span class="stat-chip">🟫 ${available} empty plots</span></div>
+  <div class="owned-asset-grid">${cards}${special}</div>${!items.length&&!hasSpecial?'<div class="owned-empty">No seeds in your inventory yet.</div>':''}
+  ${guide}`;
+ openModal('My Seeds',content,'OWNED SEEDS · NOT THE SHOP','owned-seeds');
+}
+function showSeedPlotPicker(cropId){
+ const special=cropId==='special';
+ const crop=special?SPECIAL_SEED:CROPS[cropId];
+ const owned=special?(state.seeds.special||0):(state.seeds[cropId]||0);
+ if(!crop||owned<=0){showOwnedSeeds();return;}
+ const emptyPlots=state.plots.map((plot,index)=>({...plot,index})).filter(p=>p.unlocked&&!p.crop);
+ const buttons=emptyPlots.map(p=>`<button type="button" class="secondary-btn owned-plot-button" data-do="plant-from-inventory" data-index="${p.index}" data-crop="${crop.id}">🌱 Plot ${p.index+1}</button>`).join('');
+ const content=`<p class="inventory-guide"><strong>${escapeHTML(crop.name)}</strong> · Owned ×${owned}<br>Choose an empty plot to plant this seed.</p><div class="owned-plot-grid">${buttons||'<p>There are no unlocked, empty planting plots. Harvest a crop first.</p>'}</div><div class="button-row"><button class="secondary-btn" data-do="owned-seeds">← Back to My Seeds</button></div>`;
+ openModal('Choose a Planting Plot',content,'PLANT FROM INVENTORY','seed-plot-picker');
+}
+function specialGrowthArt(c){return c.stage===0?specialSeedArt:companionArt(c.characterId||CHARACTER_DATA[0].id,'growth',`0${c.stage}_${['','newborn','baby','young','final'][c.stage]}`);}
+function plotArt(i){const p=state.plots[i];if(!p.unlocked)return 'assets/plots/plot_locked.png';if(!p.crop)return 'assets/plots/plot_tilled.png';if(p.crop.type==='special')return specialGrowthArt(p.crop);const stage=cropStage(p.crop);return `assets/crops/${p.crop.type}/${p.crop.type}_0${stage}_${STAGES[stage]}.png`;}
 function showPlot(i){const p=state.plots[i],assetPreview=plotArt(i);if(!p.unlocked){
  const nextLocked=nextLockedPlot(),rule=PLOT_UNLOCKS[i];
  const isNext=i===nextLocked,canBuy=isNext&&canExpand(i);
@@ -441,11 +836,53 @@ function showPlot(i){const p=state.plots[i],assetPreview=plotArt(i);if(!p.unlock
   <p class="plot-cost-note">Level ${rule.level} required</p>
  </div>`;
  return openModal(`Farm Plot ${i+1}`,`<div class="plot-banner plot-banner-locked">${note}</div><div class="button-row">${isNext?`<button class="primary-btn" data-do="unlock" data-index="${i}" ${canBuy?'':'disabled'}>${state.level<rule.level?`Reach Level ${rule.level} · Đạt cấp ${rule.level}`:`Unlock · ${rule.price} gold`}</button>`:''}<button class="secondary-btn" data-do="shop">Buy seeds · Mua hạt</button></div>`, 'FARM EXPANSION','plot');}
- if(!p.crop){return openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img('assets/plots/plot_tilled.png')}<div><h3>Choose a seed</h3></div></div><h3 class="section-heading">Your available seeds</h3><div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><small>Owned: ${state.seeds[c.id]||0}</small><span class="subtext">${c.mins} min total</span><button class="primary-btn" data-do="plant" data-index="${i}" data-crop="${c.id}" ${!(state.seeds[c.id]>0)?'disabled':''}>Plant seed</button></div>`).join('')}</div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Buy more seeds</button></div>`,'PLANTING • VOCABULARY','plot');}
+ if(!p.crop){return openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img('assets/plots/plot_tilled.png')}<div><h3>Choose a seed</h3></div></div><h3 class="section-heading">Your available seeds</h3><div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><small>Owned: ${state.seeds[c.id]||0}</small><span class="subtext">${c.mins} min total</span><button class="primary-btn" data-do="plant" data-index="${i}" data-crop="${c.id}" ${!(state.seeds[c.id]>0)?'disabled':''}>Plant seed</button></div>`).join('')}</div><h3 class="section-heading">Special Seed</h3><div class="item-card">${img(specialSeedArt)}<strong>Magical character seed</strong><small>Owned: ${state.seeds.special||0} · Four care questions</small><button class="primary-btn" data-do="plant-special" data-index="${i}" ${!(state.seeds.special>0)?'disabled':''}>Plant Special Seed</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Buy more seeds</button></div>`,'PLANTING • VOCABULARY','plot');}
+ if(p.crop.type==='special')return showSpecialPlot(i);
  const crop=p.crop,c=CROPS[crop.type],due=isDue(crop),stage=cropStage(crop),readyName=ACTIONS[crop.stage];let msg;
  if(due){msg=`<div class="timer-block"><strong>🔔 ${readyName} is ready! · ${ACTION_VI[crop.stage]} đã sẵn sàng!</strong>${crop.retryAfter>now()?`<span class="tag danger">Retry available in <span class="retry-live" data-until="${crop.retryAfter}">${formatSeconds(crop.retryAfter-now())}</span></span>`:''}</div>`;}
  else{msg=`<div class="timer-block"><div class="smallcaps">Next: ${readyName} · ${ACTION_VI[crop.stage]}</div><div class="timer-number live-countdown" data-until="${crop.nextDueAt}">${formatSeconds(crop.nextDueAt-now())}</div></div>`;}
  openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img(assetPreview)}<div><h3>${escapeHTML(c.name)}</h3><p>Stage ${stage+1}/5</p></div></div>${msg}<div class="button-row">${due?`<button class="primary-btn" data-do="start-question" data-index="${i}" ${crop.retryAfter>now()?'disabled':''}>${readyName} · ${ACTION_VI[crop.stage]}</button>`:''}<button class="secondary-btn" data-do="inventory">🎒 Inventory</button></div>`,'FARM • GROW YOUR VOCABULARY','plot');}
+function plantSpecial(i){
+ const plot=state.plots[i];if(!plot||!plot.unlocked||plot.crop||!(state.seeds.special>0)||actionMotion)return;
+ if(ONLINE&&!bank.length){toast('Your teacher must add vocabulary first.',true);return;}
+ const wid=chooseWord(),w=wordById(wid);state.seeds.special--;
+ plot.crop={type:'special',stage:0,wordId:wid,wordData:w,nextDueAt:now()+cropInterval(SPECIAL_SEED),retryAfter:0,wrong:0};
+ save();if(ONLINE)flushOnline();updateHUD();beginTimedAction('plant',()=>showPlantVocabulary(w,'Next: Water the Special Seed'),i);
+}
+function showSpecialPlot(i){
+ const p=state.plots[i],c=p.crop,due=isDue(c);if(!c||c.type!=='special')return;
+ const pending=ONLINE&&c.stage===0&&c.pendingReveal===true;
+ const done=c.stage===4;const title=pending?'Finish character reveal':done?'Harvest companion':SPECIAL_ACTIONS[c.stage];const vi=pending?'Hoàn tất mở nhân vật':done?'Thu hoạch':SPECIAL_ACTION_VI[c.stage];
+ const character=c.characterId?petById(c).name:'Mystery character';const tag=c.rarity?companionStars(c.rarity):'???';
+ const timer=due?'Ready now':formatSeconds(c.nextDueAt-now());
+ openModal(`Special Seed · Plot ${i+1}`,`<div class="plot-banner">${img(specialGrowthArt(c))}<div><h3>${escapeHTML(character)}</h3><p>${escapeHTML(tag)} · Stage ${c.stage+1}/5</p></div></div><div class="timer-block">${escapeHTML(title)} · ${escapeHTML(vi)}<br><strong class="live-countdown" data-until="${c.nextDueAt}">${escapeHTML(timer)}</strong></div><div class="button-row">${due?`<button class="primary-btn" data-do="${pending?'finish-special-reveal':done?'harvest-special':'start-question'}" data-index="${i}" ${c.retryAfter>now()?'disabled':''}>${escapeHTML(title)}</button>`:''}<button class="secondary-btn" data-do="inventory">Inventory</button></div>`,'SPECIAL SEED • MAGIC COMPANION','plot');
+}
+async function finishSpecialReveal(index,questionContext=null){
+ if(!ONLINE||specialServerBusy)return;
+ const crop=state.plots[index]?.crop;
+ if(!crop||crop.type!=='special'||crop.stage!==0||crop.pendingReveal!==true)return;
+ specialServerBusy=true;
+ try{
+  if(!(await syncBeforeMagicTransaction())){showSpecialPlot(index);return;}
+  const result=await serverCall('studentSpecialReveal',onlineToken,index,onlineRevision);
+  if(result?.conflict){onlineDirty=true;toast('Progress changed on another device. Please log in again.',true);showSpecialPlot(index);return;}
+  if(!result?.ok||!result.crop||!result.crop.characterId)throw Error('No confirmed reveal received.');
+  onlineRevision=result.revision;
+  Object.assign(crop,result.crop);delete crop.pendingReveal;
+  const pxy=CROP_PLOT(index);spawnEffect('growth_transformation',pxy.x+pxy.width/2,pxy.y+40);
+  save();updateHUD();
+  const word=questionContext?.word;
+  const message=`${petById(crop).name} (${companionStars(crop.rarity)}) revealed!`;
+  beginTimedAction('water',()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${word?wordCard(word,'neutral'):''}<div class="timer-block">${escapeHTML(message)}</div>`,'','feedback'),index);
+ }catch(err){toast('Reveal was not confirmed. Use Finish character reveal to retry. '+(err?.message||''),true);showSpecialPlot(index);}
+ finally{specialServerBusy=false;}
+}
+function harvestSpecial(i){const plot=state.plots[i],c=plot?.crop;if(!c||c.type!=='special'||c.stage!==4||!isDue(c)||actionMotion)return;
+ const pos=nearestValid({x:CROP_PLOT(i).x+CROP_PLOT(i).width/2,y:CROP_PLOT(i).y+CROP_PLOT(i).height+80});
+ const pet={id:'pet_'+now()+'_'+Math.random().toString(36).slice(2,8),characterId:c.characterId,rarity:c.rarity,x:pos.x,y:pos.y,dir:'down',frame:0,moveAt:now()+1500};
+ spawnEffect('harvest_celebration',pos.x,pos.y-12);state.companions.push(pet);if(!state.discovered.includes(pet.characterId))state.discovered.push(pet.characterId);plot.crop=null;
+ save();if(ONLINE)flushOnline();updateHUD();beginTimedAction('harvest',()=>{toast(`${petById(pet).name} joined your island!`);showCompanions();},i);
+}
 function unlockPlot(i){if(i!==nextLockedPlot())return;
  syncDaily();
  const rule=PLOT_UNLOCKS[i];if(!rule)return;
@@ -461,19 +898,52 @@ function plantCrop(i,id){const plot=state.plots[i],c=CROPS[id];if(!plot?.unlocke
  const wId=chooseWord();const w=wordById(wId);
  // The 90-second countdown starts when planting starts; the 2-second animation is included in it.
  state.seeds[id]--;plot.crop={type:id,wordId:wId,wordData:w,stage:0,nextDueAt:now()+cropInterval(c),retryAfter:0,wrong:0};save();if(ONLINE)flushOnline();updateHUD();
- beginTimedAction('plant',()=>{openModal('',`${wordCard(w,'correct')}<div class="timer-block compact-timer">💧 <strong>Water in ${formatSeconds(plot.crop.nextDueAt-now())}</strong></div>`,'','plant-exposure');},i);
+ beginTimedAction('plant',()=>showPlantVocabulary(w,'Next: Water the crop · Tiếp theo: Tưới cây'),i);
 }
 
 function showHarbour(){initOrders();const expire=formatSeconds(state.ordersExpire-now());const orderHtml=state.orders.map((o,i)=>{
  const enough=o.items.every(x=>(state.harvest[x.id]||0)>=x.qty);const ordinary=o.items.reduce((s,x)=>s+CROPS[x.id].sale*x.qty,0),bonus=Math.round(ordinary*1.2),xp=o.items.reduce((s,x)=>s+CROPS[x.id].xp*x.qty,0);
  return `<div class="order-card"><h3>⛵ Shipment ${i+1}</h3>${o.items.map(x=>`<div class="order-item"><span>${img(cropIcon(x.id))} ${escapeHTML(CROPS[x.id].name)}</span><strong>${state.harvest[x.id]||0} / ${x.qty}</strong></div>`).join('')}<div class="reward-note">Reward: ${bonus} gold (+20%) • ${xp} XP</div><button class="primary-btn" data-do="ship" data-index="${i}" ${enough?'':'disabled'}>${enough?'Complete order':'Need more crops'}</button></div>`;}).join('');
  const sells=CROP_DATA.filter(c=>(state.harvest[c.id]||0)>0).map(c=>`<div class="item-card">${img(cropIcon(c.id))}<strong>${escapeHTML(c.name)}</strong><small>Owned: ${state.harvest[c.id]}</small><span class="price">${goldIconHTML()} ${c.sale} · +${c.xp} XP</span><button class="primary-btn" data-do="sell" data-crop="${c.id}">Sell 1</button></div>`).join('');
- openModal('Harbour Market',`<div class="module-intro">${img('assets/ui/icons/64/icon_harbour_orders.png')}<div><h3>Three active orders</h3><p class="muted">Complete orders for 20% bonus gold.</p><span class="tag gold">Orders refresh in <span id="orderCountdown">${expire}</span></span></div></div><div class="order-grid">${orderHtml}</div><h3 class="section-heading">Sell individual crops</h3>${sells?`<div class="card-grid">${sells}</div>`:`<p class="muted">No crops to sell yet.</p>`}<div class="button-row"><button class="secondary-btn" data-do="inventory">🎒 View inventory</button><button class="secondary-btn" data-do="travel-farm">🌱 Go to Farm</button></div>`,'HARBOUR • SELL CROPS • EARN XP','harbour');}
+ openModal('Harbour Market',`<div class="module-intro">${img('assets/ui/icons/64/icon_harbour_orders.png')}<div><h3>Three active orders</h3><p class="muted">Complete orders for 20% bonus gold.</p><span class="tag gold">Orders refresh in <span id="orderCountdown">${expire}</span></span></div></div><div class="order-grid">${orderHtml}</div><h3 class="section-heading">Sell individual crops</h3>${sells?`<div class="card-grid">${sells}</div>`:`<p class="muted">No crops to sell yet.</p>`}<h3 class="section-heading">Magical companion harbour exchange</h3><p class="fine-print">Choose a companion to exchange for gold; the pet will leave the island.</p><div class="card-grid">${state.companions.map(p=>`<div class="item-card">${img(companionArt(p.characterId,'idle','idle_down'))}<strong>${escapeHTML(petById(p).name)}</strong><small>${companionStars(p.rarity)}</small><span class="price">${goldIconHTML()} ${SPECIAL_REWARDS[p.rarity].gold}</span><button class="secondary-btn" data-do="sell-pet" data-pet="${escapeHTML(p.id)}">Exchange at harbour</button></div>`).join('')||'<p class="muted">No companions to exchange.</p>'}</div><div class="button-row"><button class="secondary-btn" data-do="inventory">🎒 View inventory</button><button class="secondary-btn" data-do="travel-farm">🌱 Go to Farm</button></div>`,'HARBOUR • SELL CROPS • EARN XP','harbour');}
+function showPetExchangeConfirm(id){const pet=state.companions.find(p=>p.id===id);if(!pet)return;const reward=SPECIAL_REWARDS[pet.rarity];
+ openModal('Confirm Harbour Exchange',`<div class="plot-banner">${img(companionArt(pet.characterId,'idle','idle_down'))}<div><h3>${escapeHTML(petById(pet).name)} ${companionStars(pet.rarity)}</h3><p>The companion will leave your island permanently.</p><p>Receive ${goldIconHTML()} ${reward.gold} gold and ${reward.xp} XP.</p></div></div><div class="button-row"><button class="danger-btn" data-do="sell-pet-confirm" data-pet="${escapeHTML(pet.id)}">Confirm exchange</button><button class="secondary-btn" data-do="harbour">Keep companion</button></div>`,'COMPANION EXCHANGE','confirm');
+}
+function sellPet(id){const index=state.companions.findIndex(p=>p.id===id);if(index<0)return;const pet=state.companions[index],r=SPECIAL_REWARDS[pet.rarity];state.companions.splice(index,1);state.gold+=r.gold;earnXP(r.xp);state.sales.push({time:now(),type:'companion-exchange',characterId:pet.characterId,rarity:pet.rarity,gold:r.gold,xp:r.xp});state.sales=state.sales.slice(-500);save();if(ONLINE)flushOnline();updateHUD();toast(`${petById(pet).name} exchanged for ${r.gold} gold`);showHarbour();}
 function sellCrop(id){const c=CROPS[id];if(!c||!(state.harvest[id]>0))return;state.harvest[id]--;state.gold+=c.sale;earnXP(c.xp);state.sales.push({time:now(),type:'individual',crop:id,qty:1,gold:c.sale,xp:c.xp});state.sales=state.sales.slice(-500);save();if(ONLINE)flushOnline();updateHUD();toast(`Sold ${c.name}: +${c.sale} gold, +${c.xp} XP!`);showHarbour()}
 function completeOrder(index){const o=state.orders[index];if(!o||!o.items.every(x=>(state.harvest[x.id]||0)>=x.qty))return;let normal=0,xp=0;for(const x of o.items){state.harvest[x.id]-=x.qty;normal+=CROPS[x.id].sale*x.qty;xp+=CROPS[x.id].xp*x.qty;}const gold=Math.round(normal*1.2);state.gold+=gold;earnXP(xp);state.sales.push({time:now(),type:'shipment',items:o.items,gold,xp});state.sales=state.sales.slice(-500);state.orders[index]=makeOrder(index);save();if(ONLINE)flushOnline();updateHUD();
  openModal('Shipment complete! 🎉',`<div class="module-intro">${img('assets/ui/icons/64/icon_harbour_orders.png')}<div><h3>Great work, farmer!</h3><p>Your order is on its way. A new shipment is now available.</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} +${gold} gold</span><span class="stat-chip">⭐ +${xp} XP</span><span class="stat-chip">20% order bonus included</span></div><div class="button-row"><button class="primary-btn" data-do="harbour">View new orders</button><button class="secondary-btn" data-do="close">Back to island</button></div>`,'HARBOUR • REWARDS','feedback');}
 function badgeGrid(){const arr=[['daily','Daily challenges'],['weekly','Weekly challenges'],['vocabulary','Vocabulary mastery'],['level','Level milestone']];return `<div class="badge-wall">${arr.map(([id,title])=>`<div class="badge-tile ${state.badges.includes(id)?'':'locked'}">${img(`assets/ui/badges/64/badge_${id}.png`)}<strong>${escapeHTML(title)}</strong><br><small>${state.badges.includes(id)?'Earned!':'Locked'}</small></div>`).join('')}</div>`}
-function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button><button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div><p class="fine-print">${ONLINE?'Class progress is saved in the teacher’s private Google Sheet.':'Offline demo: progress stays in this browser.'}</p>`,'YOUR FARM • PERSONAL PROGRESS','house');}
+function showCompanions(filter='all'){
+ const cards=CHARACTER_DATA.filter(c=>filter==='all'||state.companions.some(p=>p.characterId===c.id&&String(p.rarity)===filter)).map(c=>{
+  const own=state.companions.filter(p=>p.characterId===c.id),found=state.discovered.includes(c.id);
+  const rarities=[1,2,3].map(n=>({n,count:own.filter(p=>p.rarity===n).length})).filter(x=>x.count);
+  const badges=rarities.map(x=>`<span class="collection-rarity rarity-${x.n}" aria-label="${x.n} star, quantity ${x.count}">${companionStars(x.n)} <small>×${x.count}</small></span>`).join('');
+  const status=own.length?`<span class="collection-ownership">Owned ×${own.length}</span><div class="collection-rarities">${badges}</div>`:`<span class="collection-ownership">${found?'Discovered':'Undiscovered'}</span>`;
+  return `<article class="collection-entry ${found?'':'unknown'}"><div class="collection-portrait">${img(`assets/companion-ui/portraits/${c.id}_portrait_128.png`,'',found?c.name:'Undiscovered character')}</div><div class="collection-meta"><strong class="collection-name">${found?escapeHTML(c.name):'???'}</strong><div class="collection-status">${status}</div></div>${found?`<button class="collection-details-hit" type="button" data-do="companion-detail" data-character="${c.id}" aria-label="View ${escapeHTML(c.name)} companion details"></button>`:''}</article>`;
+ }).join('');
+ openModal('Companion Collection',`<div class="stat-strip"><span class="stat-chip">Discovered ${state.discovered.length}/12</span><span class="stat-chip">On island ${state.companions.length}</span></div><p class="muted">Each Special Seed reveals a random companion and rarity. Discover all 12 characters!</p><div class="button-row collection-filters"><button class="secondary-btn" data-do="companions" data-filter="all">All</button>${[1,2,3].map(n=>`<button class="secondary-btn" data-do="companions" data-filter="${n}" aria-label="Show ${n}-star companions">${companionStars(n)}</button>`).join('')}</div><div class="collection-grid-v024">${cards||'<p>No matching companions yet.</p>'}</div>`,'12 CHARACTERS · COLLECTION','companions');
+}
+function showCompanionDetail(characterId){
+ const c=CHARACTER_DATA.find(item=>item.id===characterId);
+ if(!c || !state.discovered.includes(c.id)) return;
+ const owned=state.companions.filter(p=>p.characterId===c.id);
+ const raritySummary=[1,2,3].map(level=>{
+  const count=owned.filter(p=>p.rarity===level).length;
+  return count?`<span class="collection-rarity rarity-${level}">${companionStars(level)} <small>×${count}</small></span>`:'';
+ }).join('');
+ const phrases=c.phrases.map((phrase,i)=>`<div class="companion-phrase-pair"><span class="phrase-index">${i+1}</span><div><strong lang="en">${escapeHTML(phrase.en)}</strong><span lang="vi">${escapeHTML(phrase.vi)}</span></div></div>`).join('');
+ openModal(c.name,`<div class="companion-details-intro">
+   ${img(`assets/companion-ui/portraits/${c.id}_portrait_128.png`,'companion-details-portrait',c.name)}
+   <div><h3>${escapeHTML(c.name)}</h3><p>Owned ×${owned.length}</p><div class="collection-rarities">${raritySummary||'<span class="muted">Discovered · no companions on island</span>'}</div></div>
+  </div>
+  <h3 class="section-heading">English & Vietnamese catchphrases</h3>
+  <p class="muted">On the island: tap once for English, twice for the matching Vietnamese translation.</p>
+  <div class="companion-phrase-list">${phrases}</div>
+  <div class="button-row"><button class="secondary-btn" data-do="companions">← Back to Collection</button></div>
+ `,'COMPANION DETAILS · WORD PRACTICE','companion-detail');
+}
+function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}<button class="secondary-btn" data-do="companions">✨ Companions</button><button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div><p class="fine-print">${ONLINE?'Class progress is saved in the teacher’s private Google Sheet.':'Offline demo: progress stays in this browser.'}</p>`,'YOUR FARM • PERSONAL PROGRESS','house');}
 
 // -------------------- Vocabulary questions --------------------
 function editDistance(a,b){a=slug(a);b=slug(b);const dp=Array(b.length+1).fill(0).map((_,i)=>i);for(let i=1;i<=a.length;i++){let prev=dp[0];dp[0]=i;for(let j=1;j<=b.length;j++){let temp=dp[j];dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=temp;}}return dp[b.length]}
@@ -486,16 +956,21 @@ function distractors(w,field){const extras=SPECIAL_DISTRACTORS[slug(w.english)]|
 }
 function maskWord(s){const parts=[...s];let indices=[];for(let i=0,k=0;i<parts.length;i++)if(/[a-z]/i.test(parts[i])){if(k%2===1)indices.push(i);k++;}if(!indices.length){const fi=parts.findIndex(x=>/[a-z]/i.test(x));if(fi>=0)indices=[fi];}
  const masked=parts.map((ch,i)=>indices.includes(i)?'_':ch).join('');return {masked,indices};}
+// English-only example context lets students determine POS without giving away the Vietnamese meaning.
+function englishExample(w){
+ return String(w.example||'').replace(/^\s*(?:e\.g\.|example:)\s*/i,'').split('(')[0].trim();
+}
+function hasOtherPOS(w){return bank.some(other=>other.id!==w.id&&slug(other.english)===slug(w.english)&&other.pos!==w.pos);}
 function makeQuestion(w,stage){
  if(stage===0){const opts=shuffled([{v:'adv',label:'trạng từ (adv)'},{v:'v',label:'động từ (v)'},{v:'n',label:'danh từ (n)'},{v:'adj',label:'tính từ (adj)'}]);
-  return {stage,type:'pos',title:`Loại từ của “<strong>${escapeHTML(w.english)}</strong>”:`,options:opts.map(x=>({value:x.v,label:x.label})),correct:w.pos};}
+  return {stage,type:'pos',title:`Loại từ của “<strong>${escapeHTML(w.english)}</strong>” trong câu:<br><span class="question-context">${escapeHTML(englishExample(w))}</span>`,options:opts.map(x=>({value:x.v,label:x.label})),correct:w.pos};}
  if(stage===1){const opts=shuffled([w.meaning,...distractors(w,'meaning')]);
-  return {stage,type:'meaning',title:`“<strong>${escapeHTML(w.english)}</strong>” nghĩa là:`,options:opts.map(x=>({value:x,label:x})),correct:w.meaning};}
+  return {stage,type:'meaning',title:`“<strong>${escapeHTML(w.english)}</strong>”${hasOtherPOS(w)?` (${escapeHTML(w.pos)})`:''} nghĩa là:`,options:opts.map(x=>({value:x,label:x})),correct:w.meaning};}
  if(stage===2){const opts=shuffled([w.english,...distractors(w,'en')]);
-  return {stage,type:'english',title:`“<strong>${escapeHTML(w.meaning)}</strong>” tiếng Anh gọi là:`,options:opts.map(x=>({value:x,label:x})),correct:w.english};}
+  return {stage,type:'english',title:`“<strong>${escapeHTML(w.meaning)}</strong>” (${escapeHTML(w.pos)}) tiếng Anh gọi là:`,options:opts.map(x=>({value:x,label:x})),correct:w.english};}
  const mask=maskWord(w.english);return {stage,type:'spelling',title:`Điền vào chữ cái còn thiếu: <strong>${escapeHTML(w.meaning)}</strong> (${escapeHTML(w.pos)}).`,mask:mask.masked,indices:mask.indices,correct:w.english};
 }
-function startFarmQuestion(i){const p=state.plots[i];if(!p?.crop||!isDue(p.crop)){showPlot(i);return;}if(p.crop.retryAfter>now()){showPlot(i);return;}
+function startFarmQuestion(i){const p=state.plots[i];if(!p?.crop||!isDue(p.crop)||p.crop.type==='special'&&p.crop.stage===4){showPlot(i);return;}if(p.crop.retryAfter>now()){showPlot(i);return;}
  const w=p.crop.wordData||wordById(p.crop.wordId);qContext={kind:'farm',plotIndex:i,word:w,stage:p.crop.stage,question:makeQuestion(w,p.crop.stage),selection:null};renderQuestion();}
 function getDailyWords(){syncDaily();return deterministicShuffle(bank,DAY_SEED(state.daily.day,state.id)).slice(0,15)}
 function getWeeklyWords(){syncDaily();return deterministicShuffle(bank,DAY_SEED(state.weekly.week,state.id+'weekly')).slice(0,10)}
@@ -503,9 +978,9 @@ function challengeCards(words,answers,kind){return words.map((w,i)=>{const h=ans
 function showMissions(){
  syncDaily();const dailyWords=getDailyWords(),weeklyWords=getWeeklyWords();
  const dailyDone=Object.keys(state.daily.answers).length,weeklyDone=Object.keys(state.weekly.answers).length;
- openModal('Challenges · Thử thách',`<div class="mission-timers">
-  <div class="challenge-section"><h3>Daily · Hằng ngày</h3><p>${dailyDone}/${dailyWords.length} answered · ${state.daily.correct} correct · ${goldIconHTML()} +3/correct</p><p>Reset · Làm mới: <strong class="reset-live" data-until="${nextDailyReset()}">${countdownLong(nextDailyReset()-now())}</strong></p><small>Every day at 00:00 (Vietnam time)</small></div>
-  <div class="challenge-section"><h3>Weekly · Hằng tuần</h3><p>${weeklyDone}/${weeklyWords.length} answered · ${state.weekly.correct} correct · ${goldIconHTML()} +5/correct</p><p>Reset · Làm mới: <strong class="reset-live" data-until="${nextWeeklyReset()}">${countdownLong(nextWeeklyReset()-now())}</strong></p><small>Every Monday at 00:00 (Vietnam time)</small></div></div>
+ openModal('Challenges',`<div class="mission-timers">
+  <div class="challenge-section"><h3>Daily · Hằng ngày</h3><p>${dailyDone}/${dailyWords.length} answered · ${state.daily.correct} correct · ${goldIconHTML()} +3/correct</p><p>Reset: <strong class="reset-live" data-until="${nextDailyReset()}">${countdownLong(nextDailyReset()-now())}</strong></p><small>Every day at 00:00 (Vietnam time)</small></div>
+  <div class="challenge-section"><h3>Weekly · Hằng tuần</h3><p>${weeklyDone}/${weeklyWords.length} answered · ${state.weekly.correct} correct · ${goldIconHTML()} +5/correct</p><p>Reset: <strong class="reset-live" data-until="${nextWeeklyReset()}">${countdownLong(nextWeeklyReset()-now())}</strong></p><small>Every Monday at 00:00 (Vietnam time)</small></div></div>
   <h3 class="section-heading">Daily questions · Câu hỏi hằng ngày</h3><div class="missions-grid">${challengeCards(dailyWords,state.daily.answers,'daily')||'<p>No vocabulary yet · Chưa có từ vựng</p>'}</div>
   <h3 class="section-heading">Weekly questions · Câu hỏi hằng tuần</h3><div class="missions-grid">${challengeCards(weeklyWords,state.weekly.answers,'weekly')||'<p>No vocabulary yet · Chưa có từ vựng</p>'}</div>`,'','missions');}
 function showChallengeQuestion(kind,i){
@@ -525,7 +1000,7 @@ function renderQuestion(){const q=qContext;if(!q)return;
    if(slot===undefined)return `<span class="spell-char" aria-hidden="true">${escapeHTML(ch)}</span>`;
    return `<input class="spell-slot" type="text" maxlength="1" inputmode="text" data-spell-slot="${slot}" aria-label="Chữ cái còn thiếu ${slot+1} / ${indices.length}" placeholder="_" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">`;
   }).join('');
-  inputHtml=`<div class="spelling-area"><div class="spelling-display ${q.question.mask.length>13?'spelling-long':''}" id="spellingDisplay" role="group" aria-label="Điền chữ cái còn thiếu trong một từ">${letters}</div><p class="spell-hint">Chạm vào dấu _ để nhập chữ. Tự chuyển sang dấu _ tiếp theo.</p></div>`;
+  inputHtml=`<div class="spelling-area"><div class="spelling-display ${q.question.mask.length>13?'spelling-long':''}" id="spellingDisplay" role="group" aria-label="Điền chữ cái còn thiếu trong một từ">${letters}</div></div>`;
  }else{
   inputHtml=`<div class="choices" role="group" aria-label="Chọn đáp án">${q.question.options.map((o,i)=>`<button type="button" class="choice-btn" data-choice="${i}" aria-pressed="false"><span class="choice-letter">${String.fromCharCode(65+i)}.</span><span>${escapeHTML(o.label)}</span></button>`).join('')}</div>`;
  }
@@ -617,8 +1092,8 @@ function configureSpellingField(q){
 function chooseAnswer(i){if(!qContext||qContext.question.type==='spelling')return;qContext.selection=i;document.querySelectorAll('[data-choice]').forEach(el=>{const yes=Number(el.dataset.choice)===i;el.classList.toggle('selected',yes);el.setAttribute('aria-pressed',String(yes));});$('submitAnswer').disabled=false}
 function clearAnswer(){if(!qContext)return;if(qContext.question.type==='spelling'){qContext._clearSpelling?.();}
  else{qContext.selection=null;document.querySelectorAll('[data-choice]').forEach(el=>{el.classList.remove('selected');el.setAttribute('aria-pressed','false');});$('submitAnswer').disabled=true}}
-function logQuestionAttempt(word,source,stage,answer,correct,attempt,expected){const entry={eventId:makeHistoryId(),time:now(),source,stage,wordId:word.id,word:word.english,answer,expected,correct,attempt};state.history.push(entry);if(state.history.length>3000)state.history=state.history.slice(-3000);if(ONLINE)onlinePendingEvents.push(entry);}
-function submitAnswer(){const q=qContext;if(!q||activeModal!=='question')return;const correctValue=q.question.correct;
+function logQuestionAttempt(word,source,stage,answer,correct,attempt,expected){const entry={eventId:makeHistoryId(),time:now(),source,stage,wordId:word.id,word:`${word.english} (${word.pos})`,answer,expected,correct,attempt};state.history.push(entry);if(state.history.length>3000)state.history=state.history.slice(-3000);if(!ONLINE)void VFIRecovery.archiveAttempt(state.id,entry);if(ONLINE)onlinePendingEvents.push(entry);}
+async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q||activeModal!=='question')return;const correctValue=q.question.correct;
  let given=q.question.type==='spelling'?(q._getSpellingWord?.()||'').trim():q.question.options[q.selection]?.value;
  if(!given||given.includes('_')){toast('Please complete your answer before submitting.',true);return;}
  const correct=slug(given)===slug(correctValue);
@@ -634,9 +1109,27 @@ function submitAnswer(){const q=qContext;if(!q||activeModal!=='question')return;
  }
  const plot=state.plots[q.plotIndex],crop=plot?.crop;if(!crop)return;
  const attempt=crop.wrong+1;
- logQuestionAttempt(q.word,'Farm',ACTIONS[crop.stage],given,correct,attempt,correctValue);
+ logQuestionAttempt(q.word,'Farm',crop.type==='special'?SPECIAL_ACTIONS[crop.stage]:ACTIONS[crop.stage],given,correct,attempt,correctValue);
  if(!correct){crop.wrong++;crop.retryAfter=now()+crop.wrong*10000;save();if(ONLINE)flushOnline();
   openModal('',`<div class="answer-result incorrect"><span class="wrong-x">×</span> Incorrect</div><div class="timer-block compact-timer">Try again in <strong class="retry-live" data-until="${crop.retryAfter}">${formatSeconds(crop.retryAfter-now())}</strong></div><div class="button-row"><button id="retryNow" class="primary-btn" data-do="retry-plot" data-index="${q.plotIndex}" disabled>Try again</button></div>`,'','retry');return;
+ }
+ if(crop.type==='special'){
+  crop.wrong=0;crop.retryAfter=0;
+  const phase=crop.stage;
+  if(phase===0&&ONLINE){
+   // A successful Water question is saved as a resumable pending reveal.
+   // The server alone chooses the character and rarity for online students.
+   crop.pendingReveal=true;save();
+   await finishSpecialReveal(q.plotIndex,q);
+   return;
+  }
+  if(phase===0){const r=rollCompanion();crop.characterId=r.characterId;crop.rarity=r.rarity;}
+  crop.stage++;crop.nextDueAt=phase===3?now():now()+cropInterval(SPECIAL_SEED);
+  const pxy=CROP_PLOT(q.plotIndex);spawnEffect('growth_transformation',pxy.x+pxy.width/2,pxy.y+40);
+  const outcome=phase===0?`${petById(crop).name} (${companionStars(crop.rarity)}) revealed!`:phase===3?`${petById(crop).name} is ready to harvest!`:`Next care: ${SPECIAL_ACTIONS[crop.stage]}`;
+  save();if(ONLINE)flushOnline();updateHUD();
+  beginTimedAction(SPECIAL_ANIM[phase],()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${wordCard(q.word,'neutral')}<div class="timer-block">${escapeHTML(outcome)}</div>`,'','feedback'),q.plotIndex);
+  return;
  }
  crop.wrong=0;crop.retryAfter=0;const isHarvest=crop.stage===3;
  const phase=crop.stage;const cropType=crop.type;let reward='';
@@ -647,30 +1140,503 @@ function submitAnswer(){const q=qContext;if(!q||activeModal!=='question')return;
  beginTimedAction(isHarvest?'harvest':['water','tend','fertilize'][phase],feedback,q.plotIndex);
 }
 function showHistory(){const hs=state.history;let correct=hs.filter(x=>x.correct).length,accuracy=hs.length?Math.round(correct/hs.length*100):0;const recent=[...hs].reverse().slice(0,80);
- openModal('Learning History',`<div class="stat-strip"><span class="stat-chip">Questions: ${hs.length}</span><span class="stat-chip">Correct: ${correct}</span><span class="stat-chip">Wrong: ${hs.length-correct}</span><span class="stat-chip">Accuracy: ${accuracy}%</span></div><p class="muted">This log includes <strong>every submitted attempt</strong>, including wrong answers and retries. Teachers can view the full history from their private Google Sheets dashboard when online sync is configured.</p><div class="scroll-table"><table class="history-table"><thead><tr><th>Date</th><th>Word</th><th>Task</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody>${recent.length?recent.map(h=>`<tr><td>${escapeHTML(new Date(h.time).toLocaleString())}</td><td><strong>${escapeHTML(h.word)}</strong></td><td>${escapeHTML(h.stage)}</td><td>${escapeHTML(h.answer)}</td><td>${escapeHTML(h.expected)}</td><td class="${h.correct?'result-correct':'result-wrong'}">${h.correct?'✓':'✗'}</td></tr>`).join(''):'<tr><td colspan="6">No answers yet. Grow a carrot to begin!</td></tr>'}</tbody></table></div><div class="button-row">${ONLINE?'<button class="primary-btn" data-do="sync-words">↻ Tải từ mới · Reload words</button><button class="secondary-btn" data-do="sync-save">☁ Save progress</button>':''}<button class="secondary-btn" data-do="export-history">⬇ Export history (CSV)</button><button class="secondary-btn" data-do="house">🏠 House</button></div><p class="fine-print">Only the latest 80 attempts appear here. ${ONLINE?'Your teacher can review your answer history in their private Google Sheet.':'Offline mode stores up to 3,000 attempts locally.'}</p>`,'CURRENT STUDENT • LOCAL HISTORY','history');}
+ openModal('Learning History',`<div class="stat-strip"><span class="stat-chip">Questions: ${hs.length}</span><span class="stat-chip">Correct: ${correct}</span><span class="stat-chip">Wrong: ${hs.length-correct}</span><span class="stat-chip">Accuracy: ${accuracy}%</span></div><p class="muted">This log includes <strong>every submitted attempt</strong>, including wrong answers and retries. Teachers can view the full history from their private Google Sheets dashboard when online sync is configured.</p><div class="scroll-table"><table class="history-table"><thead><tr><th>Date</th><th>Word</th><th>Task</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody>${recent.length?recent.map(h=>`<tr><td>${escapeHTML(new Date(h.time).toLocaleString())}</td><td><strong>${escapeHTML(h.word)}</strong></td><td>${escapeHTML(h.stage)}</td><td>${escapeHTML(h.answer)}</td><td>${escapeHTML(h.expected)}</td><td class="${h.correct?'result-correct':'result-wrong'}">${h.correct?'✓':'✗'}</td></tr>`).join(''):'<tr><td colspan="6">No answers yet. Grow a carrot to begin!</td></tr>'}</tbody></table></div><div class="button-row">${ONLINE?'<button class="primary-btn" data-do="sync-words">↻ Tải từ mới · Reload words</button><button class="secondary-btn" data-do="sync-save">☁ Save progress</button>':''}<button class="secondary-btn" data-do="house">🏠 House</button></div><p class="fine-print">Only the latest 80 attempts appear here. ${ONLINE?'Your teacher can review your answer history in their private Google Sheet.':'Offline mode stores up to 3,000 attempts locally.'}</p>`,'CURRENT STUDENT • LOCAL HISTORY','history');}
 function saveDownload(name,content,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function csvCell(s){return `"${String(s??'').replace(/"/g,'""')}"`}
 function exportHistory(){const cols=['timestamp','student_id','student_name','source','stage','word','submitted_answer','correct_answer','correct','attempt'];const lines=state.history.map((h,i)=>[new Date(h.time).toISOString(),state.id,state.name,h.source,h.stage,h.word,h.answer,h.expected,h.correct,h.attempt||''].map(csvCell).join(','));saveDownload(`student_${state.id}_answer_history.csv`,[cols.join(','),...lines].join('\r\n'),'text/csv;charset=utf-8');toast('History CSV exported to your device.')}
 function exportSave(){saveDownload(`student_${state.id}_local_save.json`,JSON.stringify({exportedAt:new Date().toISOString(),note:'Local prototype save — not an online account',state},null,2),'application/json')}
-function exportTemplate(){const rows=[['English word','UK IPA','Part of speech','Meaning','Example meaning'],['planet','/ˈplæn.ɪt/','n','hành tinh','Earth is a planet. (Trái Đất là một hành tinh.)']];saveDownload('vocab_farm_vocabulary_template.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8')}
+function exportTemplate(){const rows=[['English word','UK IPA','Part of speech','Meaning','Example meaning'],['record','/ˈrek.ɔːd/','n','bản ghi','Keep a record of your progress. (Hãy lưu lại bản ghi về tiến bộ của em.)'],['record','/rɪˈkɔːd/','v','ghi lại','Record your answers. (Hãy ghi lại các câu trả lời.)']];saveDownload('vocab_farm_vocabulary_template.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8')}
 function parseCSV(text){text=text.replace(/^\ufeff/,'');const lines=[];let row=[],cell='',q=false;for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(q&&text[i+1]==='"'){cell+='"';i++}else q=!q;}else if(ch===','&&!q){row.push(cell);cell='';}else if((ch==='\n'||ch==='\r')&&!q){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);cell='';if(row.some(x=>x.trim()))lines.push(row);row=[];}else cell+=ch;}row.push(cell);if(row.some(x=>x.trim()))lines.push(row);return lines;}
 function importCSVFile(e){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{
  const rows=parseCSV(String(reader.result||''));if(!rows.length)throw Error('The file is empty.');let start=/english|từ vựng|word/i.test(rows[0][0]||'')?1:0;const current=JSON.parse(localStorage.getItem(BANK_KEY)||'[]');let added=0,skipped=0;
- for(const line of rows.slice(start)){if(line.length<5){skipped++;continue;}const [english,ipa,pos0,meaning,example]=line.map(x=>x.trim());const pos=pos0.replace(/[().]/g,'').trim().toLowerCase();if(!english||!ipa||!meaning||!['n','v','adj','adv'].includes(pos)||!example){skipped++;continue;}const id='custom_'+slug(english).replace(/[^a-z0-9]+/g,'_');if(bank.some(x=>slug(x.english)===slug(english))){skipped++;continue;}const w={id,english,ipa,pos,meaning,example};current.push(w);bank.push(w);added++;}
+ for(const line of rows.slice(start)){if(line.length<5){skipped++;continue;}const [english,ipa,pos0,meaning,example]=line.map(x=>x.trim());const pos=pos0.replace(/[().]/g,'').trim().toLowerCase();if(!english||!ipa||!meaning||!['n','v','adj','adv'].includes(pos)||!example){skipped++;continue;}const id='custom_'+slug(english).replace(/[^a-z0-9]+/g,'_')+'_'+pos;if(bank.some(x=>slug(x.english)===slug(english)&&x.pos===pos)){skipped++;continue;}const w={id,english,ipa,pos,meaning,example};current.push(w);bank.push(w);added++;}
  localStorage.setItem(BANK_KEY,JSON.stringify(current));toast(`${added} words imported (${skipped} skipped).`);
  }catch(err){toast('Could not import CSV: '+err.message,true)}};reader.readAsText(file,'UTF-8');}
 
+// -------------------- Companions, fences, speech --------------------
+function clearPendingPetTap(){if(pendingPetClickTimer)clearTimeout(pendingPetClickTimer);pendingPetClickTimer=null;lastPetClick=null;}
+function setPlacementMode(mode){
+ placementMode=mode;
+ if(!mode||mode.kind!=='fence')fencePlacementPreview=null;
+ if(!mode||mode.kind!=='decor')decorationPlacementPreview=null;
+ const cancel=$('placementCancel');
+ if(cancel){cancel.classList.toggle('hidden',!mode);cancel.textContent=mode?.kind==='pet'?'✕ Cancel pet move · Hủy di chuyển':mode?.kind==='decor'?'✕ Cancel decoration · Hủy trang trí':'✕ Cancel fence · Hủy đặt';}
+ const tools=$('fenceOrientation');if(tools){tools.classList.toggle('hidden',mode?.kind!=='fence');tools.querySelectorAll('[data-fence-orient]').forEach(b=>{b.classList.toggle('selected',b.dataset.fenceOrient===(mode?.dir||'h'));b.setAttribute('aria-pressed',String(b.dataset.fenceOrient===(mode?.dir||'h')));});}
+}
+function setFencePlacementOrientation(dir){if(placementMode?.kind!=='fence'||!['h','v'].includes(dir))return;setPlacementMode({...placementMode,dir});}
+function cancelPlacement(){if(!placementMode)return;setPlacementMode(null);toast('Placement cancelled. · Đã hủy đặt.');}
+function beginPlacement(item){clearPendingPetTap();petSpeech=null;$('petSpeechBubble')?.classList.add('hidden');closeModal();setPlacementMode(item);toast(item.kind==='pet'?'Tap an open spot to relocate your companion.':item.kind==='decor'?'Tap clear grass to place the decoration. Long-press it later to move or remove.':'Choose Horizontal or Vertical, then tap the ground. Fences snap to the grid.');}
+function segmentsCross(a,b,c,d){
+ // Inclusive segment intersection: endpoint contact must also block pet escape.
+ const cross=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
+ const sign=v=>v>1e-7?1:v< -1e-7?-1:0;
+ const o1=sign(cross(a,b,c)),o2=sign(cross(a,b,d));
+ const o3=sign(cross(c,d,a)),o4=sign(cross(c,d,b));
+ const on=(p,q,r)=>r.x>=Math.min(p.x,q.x)-1e-7&&r.x<=Math.max(p.x,q.x)+1e-7&&r.y>=Math.min(p.y,q.y)-1e-7&&r.y<=Math.max(p.y,q.y)+1e-7;
+ if(o1!==o2&&o3!==o4)return true;
+ return (o1===0&&on(a,b,c))||(o2===0&&on(a,b,d))||(o3===0&&on(c,d,a))||(o4===0&&on(c,d,b));
+}
+function fenceEndpoints(f){const x=f.gx*FENCE_GRID,y=f.gy*FENCE_GRID;return [{x,y},{x:x+(f.dir==='h'?FENCE_GRID:0),y:y+(f.dir==='v'?FENCE_GRID:0)}];}
+function distToSegment(p,a,b){const dx=b.x-a.x,dy=b.y-a.y,t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy),0,1);return Math.hypot(p.x-a.x-dx*t,p.y-a.y-dy*t);}
+function blockedByFences(from,to){for(const f of state.fences){const [a,b]=fenceEndpoints(f);
+ if(segmentsCross(from,to,a,b)||distToSegment(to,a,b)<7||distToSegment(a,from,to)<7||distToSegment(b,from,to)<7)return true;
+ }return false;}
+// v0.25: A closed loop splits the grid into distinct regions.
+// Fence walls live on *edges* (not tile centers), preventing crossing even when
+// short movement steps hit a corner or an animation makes the body overlap a rail.
+let fenceRegionCache={signature:null,labels:null};
+function fenceRegions(){
+ const fences=state?.fences||[];
+ const signature=fences.map(f=>`${f.gx},${f.gy},${f.dir}`).sort().join('|');
+ if(fenceRegionCache.signature===signature&&fenceRegionCache.labels)return fenceRegionCache.labels;
+ const w=Math.ceil(MAP.world.width/FENCE_GRID)+1;
+ const h=Math.ceil(MAP.world.height/FENCE_GRID)+1;
+ const horizontal=new Set(fences.filter(f=>f.dir==='h').map(f=>`${f.gx},${f.gy}`));
+ const vertical=new Set(fences.filter(f=>f.dir==='v').map(f=>`${f.gx},${f.gy}`));
+ const labels=new Int32Array(w*h);labels.fill(-1);
+ let region=0;
+ for(let cy=0;cy<h;cy++)for(let cx=0;cx<w;cx++){
+  const start=cy*w+cx;if(labels[start]>=0)continue;
+  const queue=[start];labels[start]=region;
+  for(let head=0;head<queue.length;head++){
+   const current=queue[head],x=current%w,y=Math.floor(current/w);
+   const neighbors=[
+    [x-1,y,vertical.has(`${x},${y}`)],
+    [x+1,y,vertical.has(`${x+1},${y}`)],
+    [x,y-1,horizontal.has(`${x},${y}`)],
+    [x,y+1,horizontal.has(`${x},${y+1}`)]
+   ];
+   for(const [nx,ny,blocked] of neighbors){
+    if(blocked||nx<0||nx>=w||ny<0||ny>=h)continue;
+    const ni=ny*w+nx;
+    if(labels[ni]>=0)continue;
+    labels[ni]=region;queue.push(ni);
+   }
+  }
+  region++;
+ }
+ fenceRegionCache={signature,labels:{w,h,data:labels}};
+ return fenceRegionCache.labels;
+}
+function fenceRegionAt(x,y){
+ const {w,h,data}=fenceRegions();
+ const cx=Math.floor(x/FENCE_GRID),cy=Math.floor(y/FENCE_GRID);
+ if(cx<0||cy<0||cx>=w||cy>=h)return -1;
+ return data[cy*w+cx];
+}
+function sameFenceRegion(a,b){
+ return fenceRegionAt(a.x,a.y)===fenceRegionAt(b.x,b.y);
+}
+function canPetStand(x,y){
+ if(!canStand(x,y))return false;
+ return !state.fences.some(f=>{
+  const [a,b]=fenceEndpoints(f);
+  return distToSegment({x,y},a,b)<13;
+ })&&!state.decorations.some(d=>Math.hypot(x-d.x,y-d.y)<(DECOR_BY_ID[d.id]?.radius||14)+6);
+}
+function nearestPetSpot(x,y){
+ if(canPetStand(x,y))return {x,y};
+ for(let r=16;r<=160;r+=16){
+  for(let k=0;k<24;k++){
+   const angle=(k/24)*Math.PI*2;
+   const pos={x:x+Math.cos(angle)*r,y:y+Math.sin(angle)*r};
+   if(canPetStand(pos.x,pos.y)&&sameFenceRegion({x,y},pos))return pos;
+  }
+ }
+ return null;
+}
+function petHeading(dx,dy,previous){
+ // Choose one facing direction for an entire walking trip, never switch at diagonal thresholds.
+ if(Math.abs(dx)>Math.abs(dy)*1.2)return dx>0?'right':'left';
+ if(Math.abs(dy)>Math.abs(dx)*1.2)return dy>0?'down':'up';
+ if(previous==='left'&&dx<0||previous==='right'&&dx>0||previous==='up'&&dy<0||previous==='down'&&dy>0)return previous;
+ return Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');
+}
+function fenceAt(pos){let hit=-1,best=19;state.fences.forEach((f,i)=>{const [a,b]=fenceEndpoints(f),d=distToSegment(pos,a,b);if(d<best){best=d;hit=i;}});return hit;}
+function petAt(pos){let idx=-1,best=33;state.companions.forEach((p,i)=>{const distance=Math.hypot(pos.x-p.x,(pos.y-(p.y-25))*.75);if(distance<best){idx=i;best=distance;}});return idx;}
+function worldPoint(e){const rect=canvas.getBoundingClientRect();return {x:(e.clientX-rect.left)/zoom+camera.x,y:(e.clientY-rect.top)/zoom+camera.y};}
+function validateFence(f,ignore=-1){const [a,b]=fenceEndpoints(f);
+ if(!canStand((a.x+b.x)/2,(a.y+b.y)/2))return false;
+ // Never place a fence directly underneath an existing companion.
+ if(state.companions.some(p=>distToSegment({x:p.x,y:p.y},a,b)<13))return false;
+ if(state.fences.some((other,i)=>i!==ignore&&other.gx===f.gx&&other.gy===f.gy&&other.dir===f.dir))return false;
+ // Only two styles: forbid intersections in the middle of a rail, but allow joined corners/endpoints.
+ for(let i=0;i<state.fences.length;i++){
+  if(i===ignore)continue;const [c,d]=fenceEndpoints(state.fences[i]);
+  if(segmentsCross(a,b,c,d)){
+   const joined=[a,b].some(p=>[c,d].some(q=>p.x===q.x&&p.y===q.y));
+   if(!joined)return false;
+  }
+ }
+ return !MAP.farm.plots.some(p=>{const x=p.x+p.width/2,y=p.y+p.height/2;return distToSegment({x,y},a,b)<33;});
+}
+function snapFence(pos,dir,ignore=-1){
+ // Clicks are interpreted as segment MIDPOINTS, not a post. Both fence orientations use the same grid.
+ const gx=Math.round((pos.x-(dir==='h'?FENCE_GRID/2:0))/FENCE_GRID);
+ const gy=Math.round((pos.y-(dir==='v'?FENCE_GRID/2:0))/FENCE_GRID);
+ const candidate={gx,gy,dir};
+ const options=[candidate];
+ // Prefer existing endpoints when the desired segment is close to another piece.
+ for(const other of state.fences){for(const endpoint of fenceEndpoints(other)){
+  for(const isEnd of [false,true]){
+   const sx=endpoint.x-(dir==='h'&&isEnd?FENCE_GRID:0);
+   const sy=endpoint.y-(dir==='v'&&isEnd?FENCE_GRID:0);
+   options.push({gx:Math.round(sx/FENCE_GRID),gy:Math.round(sy/FENCE_GRID),dir});
+  }
+ }}
+ let best=null,bestScore=Infinity;
+ for(const f of options){if(!validateFence(f,ignore))continue;
+  const [a,b]=fenceEndpoints(f),cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
+  const distance=Math.hypot(cx-pos.x,cy-pos.y);
+  if(distance>FENCE_GRID*.88)continue;
+  const connections=state.fences.reduce((sum,old,i)=>{
+   if(i===ignore)return sum;const ends=fenceEndpoints(old);
+   return sum+[a,b].filter(p=>ends.some(q=>p.x===q.x&&p.y===q.y)).length;
+  },0);
+  const score=distance-connections*3;
+  if(score<bestScore){bestScore=score;best=f;}
+ }
+ return best||candidate;
+}
+function snapDecoration(p){return {x:Math.round(p.x/16)*16,y:Math.round(p.y/16)*16};}
+function validateDecoration(item,x,y,ignore=-1){
+ if(!item||!canStand(x,y)||!walkable(x,y))return false;
+ const radius=item.radius||16;
+ if(Math.hypot(x-player.x,y-player.y)<radius+11)return false;
+ if(state.companions.some(p=>Math.hypot(x-p.x,y-p.y)<radius+14))return false;
+ if(state.decorations.some((d,i)=>i!==ignore&&Math.hypot(x-d.x,y-d.y)<radius+(DECOR_BY_ID[d.id]?.radius||15)+5))return false;
+ if(state.fences.some(f=>{const [a,b]=fenceEndpoints(f);return distToSegment({x,y},a,b)<radius+8;}))return false;
+ const gap=Math.max(18,radius);
+ if(MAP.farm.plots.some(p=>x>p.x-gap&&x<p.x+p.width+gap&&y>p.y-gap&&y<p.y+p.height+gap))return false;
+ if(MAP.layers.buildings.some(b=>x>b.x-gap&&x<b.x+b.width+gap&&y>b.y-gap&&y<b.y+b.height+gap))return false;
+ return true;
+}
+// An object's visual size may differ from its walkable ground footprint.
+// Hit test uses its actual rendered sprite rectangle, not a universal 29px circle.
+function decorationDrawBox(item,x,y){
+ const size=item.size||64;
+ return {x:Math.round(x-size/2),y:Math.round(y-59*size/64),size};
+}
+function decorationAt(pos){
+ let hit=-1,best=Infinity;
+ state.decorations.forEach((d,i)=>{
+  const item=DECOR_BY_ID[d.id];if(!item)return;
+  const box=decorationDrawBox(item,d.x,d.y),pad=7;
+  // Most upper halves are visible leaves, furniture, arches or roofs.
+  const rx=pos.x-box.x, ry=pos.y-box.y;
+  if(rx < -pad || rx > box.size+pad || ry < -pad || ry > box.size+pad)return;
+  const score=Math.hypot(pos.x-d.x,(pos.y-(d.y-box.size*.40))*.85);
+  if(score<best){best=score;hit=i;}
+ });
+ return hit;
+}
+function showDecorationTools(index){const d=state.decorations[index],item=d&&DECOR_BY_ID[d.id];if(!item)return;
+ openModal(item.name,`<div class="plot-banner">${img(decorArt(item))}<div><h3>${escapeHTML(item.name)}</h3><p>Placed on your island</p></div></div><div class="button-row"><button class="primary-btn" data-do="move-decor" data-decor="${index}">Move</button><button class="secondary-btn" data-do="remove-decor" data-decor="${index}">Return to bag</button></div>`,'ISLAND DECORATION','decor-tools');
+}
+function removeDecoration(index){const d=state.decorations[index];if(!d)return;
+ state.decorStock[d.id]=(state.decorStock[d.id]||0)+1;state.decorations.splice(index,1);save();showOwnedDecorations();toast('Decoration returned to bag.');
+}
+function drawDecorations(){
+ for(const d of state.decorations){
+  const item=DECOR_BY_ID[d.id];if(!item)continue;
+  const b=decorationDrawBox(item,d.x,d.y);
+  drawImage(ctx,decorArt(item),b.x,b.y,b.size,b.size);
+ }
+ if(placementMode?.kind==='decor'&&decorationPlacementPreview){
+  const item=DECOR_BY_ID[placementMode.item],pos=snapDecoration(decorationPlacementPreview);
+  const good=validateDecoration(item,pos.x,pos.y,placementMode.mode==='move'?placementMode.index:-1);
+  ctx.save();ctx.globalAlpha=good?.68:.28;
+  if(item){const b=decorationDrawBox(item,pos.x,pos.y);drawImage(ctx,decorArt(item),b.x,b.y,b.size,b.size);}
+  ctx.restore();
+  ctx.save();ctx.fillStyle=good?'#83ce72':'#f06555';ctx.strokeStyle='#443424';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(pos.x,pos.y,4,0,2*Math.PI);ctx.fill();ctx.stroke();ctx.restore();
+ }
+}
+function blockedByDecorations(x,y){return state.decorations.some(d=>Math.hypot(x-d.x,y-d.y)<(DECOR_BY_ID[d.id]?.radius||15)+8);}
+function canPlayerStand(x,y){return canStand(x,y)&&!blockedByDecorations(x,y);}
+
+function finalizePlacement(pos){const mode=placementMode;if(!mode)return false;
+ if(mode.kind==='decor'){
+  const item=DECOR_BY_ID[mode.item],point=snapDecoration(pos),ignore=mode.mode==='move'?mode.index:-1;
+  if(!validateDecoration(item,point.x,point.y,ignore)){toast('Choose open ground away from other objects.',true);return true;}
+  if(mode.mode==='move'){if(!state.decorations[mode.index])return true;state.decorations[mode.index]={id:mode.item,x:point.x,y:point.y};}
+  else{if(!(state.decorStock[mode.item]>0))return true;state.decorStock[mode.item]--;state.decorations.push({id:mode.item,x:point.x,y:point.y});}
+  setPlacementMode(null);save();toast(`${item.name} placed! Long-press to move or remove.`);return true;
+ }
+ if(mode.kind==='pet'){
+  const pet=state.companions[mode.index];if(!pet||!canPetStand(pos.x,pos.y)){toast('Choose open ground away from the fence posts.',true);return true;}
+  pet.x=pos.x;pet.y=pos.y;pet.target=null;pet.moveAt=now()+1800;pet.dir='down';setPlacementMode(null);save();toast('Companion relocated.');return true;
+ }
+ const f=snapFence(pos,mode.dir||'h',mode.mode==='move'?mode.index:-1);
+ if(!validateFence(f,mode.mode==='move'?mode.index:-1)){toast('Cannot place here. Choose another grid segment.',true);return true;}
+ if(mode.mode==='move'){if(!state.fences[mode.index]){setPlacementMode(null);return true;}state.fences[mode.index]=f;}
+ else{if(state.fenceStock<1){setPlacementMode(null);return true;}state.fences.push(f);state.fenceStock--;}
+ state.companions.forEach(p=>{p.target=null;p.frame=0;p.moveAt=now()+1200;});
+ setPlacementMode(null);save();toast('Fence placed. Touch and hold it for options.');return true;
+}
+function showFenceTools(index){const f=state.fences[index];if(!f)return;
+ openModal('Wooden Fence',`<div class="plot-banner">${img(`assets/fences/fence_${f.dir==='h'?'horizontal':'vertical'}.png`)}<div><h3>${f.dir==='h'?'Horizontal':'Vertical'}</h3><p>Grid position ${f.gx}, ${f.gy}</p></div></div><p class="muted">Change between two orientations. The first fence post stays fixed.</p><div class="button-row fence-modal-controls"><button class="secondary-btn ${f.dir==='h'?'selected':''}" data-do="fence-set-dir" data-dir="h" data-fence="${index}" ${f.dir==='h'?'disabled':''}>↔ Horizontal</button><button class="secondary-btn ${f.dir==='v'?'selected':''}" data-do="fence-set-dir" data-dir="v" data-fence="${index}" ${f.dir==='v'?'disabled':''}>↕ Vertical</button></div><div class="button-row"><button class="primary-btn" data-do="move-fence" data-fence="${index}">Move</button><button class="secondary-btn" data-do="remove-fence" data-fence="${index}">Remove / return to bag</button></div>`,'FENCE OPTIONS','fence');
+}
+function rotateFence(i){const f=state.fences[i];if(f)setFenceOrientation(i,f.dir==='h'?'v':'h');}
+function setFenceOrientation(i,dir){const f=state.fences[i];if(!f||!['h','v'].includes(dir))return;
+ const rotated={...f,dir}; // The starting post never moves. No free-angle rotation or floating-point drift.
+ if(!validateFence(rotated,i)){toast('This orientation is blocked. Move the fence to an open segment.',true);return;}
+ state.fences[i]=rotated;state.companions.forEach(p=>{p.target=null;p.frame=0;p.moveAt=now()+1200;});save();showFenceTools(i);
+}
+function removeFence(i){if(!state.fences[i])return;state.fences.splice(i,1);state.fenceStock++;save();showInventory();}
+function drawFenceSprite(f,alpha=1){
+ // Native 64px fence art: align visible post caps exactly to geometric collision endpoints.
+ const [a]=fenceEndpoints(f),horizontal=f.dir==='h';const path=`assets/fences/fence_${horizontal?'horizontal':'vertical'}.png`;
+ ctx.save();ctx.globalAlpha*=alpha;
+ drawImage(ctx,path,a.x-(horizontal?16:17),a.y-(horizontal?35:10),64,64);
+ ctx.restore();
+}
+function drawFences(){for(const f of state.fences)drawFenceSprite(f);
+ if(placementMode?.kind==='fence'&&fencePlacementPreview){
+  const f=snapFence(fencePlacementPreview,placementMode.dir||'h',placementMode.mode==='move'?placementMode.index:-1);
+  const valid=validateFence(f,placementMode.mode==='move'?placementMode.index:-1);
+  drawFenceSprite(f,valid?.65:.25);
+  const [a,b]=fenceEndpoints(f);ctx.save();ctx.fillStyle=valid?'#85df7e':'#fa6f54';ctx.strokeStyle='#31583b';ctx.lineWidth=1.5;
+  for(const p of [a,b]){ctx.beginPath();ctx.arc(p.x,p.y,3.5,0,Math.PI*2);ctx.fill();ctx.stroke();}ctx.restore();
+ }
+}
+function updateCompanions(dt){if(!state)return;for(const pet of state.companions){
+  const t=now();if(!pet.moveAt)pet.moveAt=t+500;
+  if(petSpeech?.petId===pet.id&&petSpeech.expires>t){pet.target=null;pet.moveAt=Math.max(pet.moveAt,t+600);continue;}
+  if(!pet.target&&t>=pet.moveAt){
+   const rad=Math.random()*Math.PI*2,dist=25+Math.random()*65;
+   const dest={x:pet.x+Math.cos(rad)*dist,y:pet.y+Math.sin(rad)*dist};
+   if(canPetStand(dest.x,dest.y)&&sameFenceRegion(pet,dest)&&!blockedByFences(pet,dest)){
+    pet.target=dest;
+    pet.dir=petHeading(dest.x-pet.x,dest.y-pet.y,pet.dir);
+    pet.walkDistance=0;pet.frame=0;
+   } else pet.moveAt=t+600+Math.random()*1200;
+  }
+  if(pet.target){
+   const dx=pet.target.x-pet.x,dy=pet.target.y-pet.y,dist=Math.hypot(dx,dy);
+   const step=Math.min(dist,dt*30);
+   if(dist<3){
+    pet.target=null;pet.walkDistance=0;pet.frame=0;
+    pet.moveAt=t+1400+Math.random()*1900;
+    continue;
+   }
+   const to={x:pet.x+dx/dist*step,y:pet.y+dy/dist*step};
+   if(canPetStand(to.x,to.y)&&sameFenceRegion({x:pet.x,y:pet.y},to)&&!blockedByFences({x:pet.x,y:pet.y},to)){
+    // Direction is deliberately locked from target selection until arrival.
+    pet.x=to.x;pet.y=to.y;
+    pet.walkDistance=(pet.walkDistance||0)+step;
+    pet.frame=Math.floor(pet.walkDistance/8)%4;
+   }else{
+    pet.target=null;pet.frame=0;pet.walkDistance=0;
+    pet.moveAt=t+1100+Math.random()*1400;
+   }
+  }
+ }}
+function drawCompanions(){for(const pet of state.companions){
+  if(placementMode?.kind==='pet'&&state.companions[placementMode.index]===pet){const im=asset(effectPath('pet_selection_ring'));if(im.complete&&im.naturalWidth)ctx.drawImage(im,(Math.floor(now()/230)%4)*64,0,64,64,pet.x-32,pet.y-40,64,64);}
+const id=pet.characterId,dir=pet.dir||'down',moving=!!pet.target;
+  const path=moving?companionArt(id,'sheets',`walk_${dir}`):companionArt(id,'idle',`idle_${dir}`);
+  const sprite=asset(path);
+  const intactIdle=asset(companionArt(id,'idle',`idle_${dir}`));
+  const hasValidWalk=moving && sprite.complete && sprite.naturalWidth===256 && sprite.naturalHeight===64;
+  const completeIdle=intactIdle.complete && intactIdle.naturalWidth===64 && intactIdle.naturalHeight===64;
+  if(hasValidWalk){ctx.drawImage(sprite,(Math.floor(pet.frame||0)%4)*64,0,64,64,Math.round(pet.x)-32,Math.round(pet.y)-59,64,64);}
+  else if(completeIdle){ctx.drawImage(intactIdle,Math.round(pet.x)-32,Math.round(pet.y)-59,64,64);}
+  else if(sprite.complete&&sprite.naturalWidth){ctx.drawImage(sprite,Math.round(pet.x)-32,Math.round(pet.y)-59,64,64);}
+  ctx.save();ctx.font='bold 12px Arial,sans-serif';ctx.textAlign='center';ctx.strokeStyle='#432b1c';ctx.fillStyle=pet.rarity===3?'#ffce40':pet.rarity===2?'#81caff':'#f0f0f0';ctx.lineWidth=3;
+  const stars=companionStars(pet.rarity);ctx.strokeText(stars,Math.round(pet.x),Math.round(pet.y)-63);ctx.fillText(stars,Math.round(pet.x),Math.round(pet.y)-63);ctx.restore();
+  }
+  if(petSpeech&&petSpeech.expires>now())updateSpeechBubble();else if($('petSpeechBubble'))$('petSpeechBubble').classList.add('hidden');
+}
+function updateSpeechBubble(){const speech=petSpeech,el=$('petSpeechBubble');if(!speech||!el)return;
+ const pet=state.companions.find(p=>p.id===speech.petId);if(!pet){el.classList.add('hidden');return;}
+ el.classList.remove('hidden');
+ const bubbleWidth=el.getBoundingClientRect().width||Math.min(300,viewW-24),bubbleHeight=el.getBoundingClientRect().height||88;
+ const centerX=(pet.x-camera.x)*zoom;
+ const topY=(pet.y-66-camera.y)*zoom-bubbleHeight;
+ el.style.left=clamp(centerX-bubbleWidth/2,12,Math.max(12,viewW-bubbleWidth-12))+'px';
+ el.style.top=clamp(topY,5,Math.max(5,viewH-bubbleHeight-5))+'px';
+}
+function speakPet(pet,lang){
+ const char=petById(pet),phrases=char.phrases||[],t=now();
+ const recentEnglish=lang==='vi'&&pet.lastPhraseLanguage==='en'&&Number.isInteger(pet.lastPhraseIndex)&&t-(pet.lastPhraseTime||0)<15000;
+ const index=recentEnglish?pet.lastPhraseIndex:(Number(pet.phraseCursor)||0)%phrases.length;
+ const pair=phrases[index]||{en:'Hello!',vi:'Xin chào!'};
+ const message=pair[lang]||pair.en;
+ if(!recentEnglish)pet.phraseCursor=(index+1)%phrases.length;
+ pet.lastPhraseIndex=index;pet.lastPhraseLanguage=lang;pet.lastPhraseTime=t;
+ spawnEffect('happy_reaction',pet.x,pet.y-30);
+ pet.target=null;pet.moveAt=t+1400;
+ petSpeech={petId:pet.id,text:message,expires:t+Math.min(10000,Math.max(4500,message.length*103))};
+ $('petSpeechText').textContent=message;$('petSpeechBubble').setAttribute('lang',lang);
+ save(); // Keep this companion's phrase rotation across offline demo reloads.
+ // No pet voice playback: text only, in English or Vietnamese.
+}
+function handlePetTap(index){const pet=state.companions[index];if(!pet)return;
+ const t=now();if(lastPetClick&&lastPetClick.id===pet.id&&t-lastPetClick.time<340){
+  if(pendingPetClickTimer)clearTimeout(pendingPetClickTimer);pendingPetClickTimer=null;lastPetClick=null;speakPet(pet,'vi');return;
+ }
+ if(lastPetClick&&lastPetClick.id!==pet.id)clearPendingPetTap();
+ lastPetClick={id:pet.id,time:t};pendingPetClickTimer=setTimeout(()=>{if(lastPetClick?.id===pet.id)speakPet(pet,'en');lastPetClick=null;pendingPetClickTimer=null;},345);
+}
+function handleWorldLongPress(p){const pi=petAt(p);if(pi>=0){beginPlacement({kind:'pet',index:pi});return true;}
+ const fi=fenceAt(p);if(fi>=0){showFenceTools(fi);return true;}
+ const di=decorationAt(p);if(di>=0){showDecorationTools(di);return true;}return false;
+}
+function handleWorldTap(e){if(!playing||!$('modalOverlay').classList.contains('hidden'))return;
+ const p=worldPoint(e);if(placementMode){finalizePlacement(p);return;}
+ const pi=petAt(p);if(pi>=0){handlePetTap(pi);return;}
+ canvasTap(e);
+}
+
+
+// --------------------- OFFLINE TEST BACKUP & RECOVERY ---------------------
+function recoverySlot(explicit){return explicit||(state?.id||$('studentSelect').value);}
+function recoverStats(p){return `Level ${p.level} · ${Number(p.gold).toLocaleString('en-US')} gold · ${Number(p.xpTotal)||0} lifetime XP · ${p.companions.length} companions · ${p.history.length} recent answers`;}
+function showUpdateNotice(){
+ const el=$('updateNotice');if(el)el.classList.remove('hidden');
+}
+function hideUpdateNotice(){const el=$('updateNotice');if(el)el.classList.add('hidden');}
+async function showRecovery(explicitSlot){
+ const slot=recoverySlot(explicitSlot),currentRaw=localStorage.getItem(STORAGE_PREFIX+slot);
+ let current=null,problem='';
+ try{if(currentRaw)current=VFIRecovery.migrateProfile(JSON.parse(currentRaw),newProfile(slot),slot);}catch(e){problem=e.message;}
+ let records=[];try{records=await VFIRecovery.listSnapshots(slot);}catch(e){problem=problem||e.message;}
+ const summary=current?`<div class="recovery-current"><strong>Current profile ${escapeHTML(slot)}</strong><span>${escapeHTML(recoverStats(current))}</span></div>`:
+  `<div class="recovery-current"><strong>Profile ${escapeHTML(slot)}</strong><span>${currentRaw?'Unreadable save: '+escapeHTML(problem):'No primary browser save found'}</span></div>`;
+ const list=records.map(r=>`<div class="recovery-entry"><div><strong>${escapeHTML(new Date(r.createdAt).toLocaleString())}</strong><small>${escapeHTML(r.reason)} · Lv ${r.level} · ${Number(r.gold).toLocaleString('en-US')} gold · ${r.companions} pets · ${r.attempts} recent attempts</small></div><button class="secondary-btn" data-do="recovery-preview" data-snapshot="${escapeHTML(r.id)}">Preview</button></div>`).join('')||'<p>No recoverable snapshots have been found in this browser.</p>';
+ const footer=!current?`<div class="recovery-warning">If a backup exists, restore it first. Starting a new test profile will not delete any backups.</div><button class="secondary-btn" data-do="recovery-start-new">Create a NEW test profile deliberately</button>`:'';
+ const contents=`<p class="recovery-note"><strong>Offline Developer Test only.</strong> This does not synchronize to Google Sheets. Browser backups may disappear if site data is cleared. Download a recovery JSON to a safe location outside this browser.</p>${summary}<div class="button-row"><button class="primary-btn" data-do="recovery-snapshot" ${current?'':'disabled'}>Create snapshot</button><button class="secondary-btn" data-do="recovery-export" ${current?'':'disabled'}>Download recovery JSON</button><button class="secondary-btn" data-do="recovery-import">Import recovery JSON</button></div><h3 class="section-heading">Available browser snapshots (${records.length})</h3><div class="recovery-list">${list}</div>${footer}<p class="fine-print">Snapshots are stored locally in IndexedDB with an emergency local-storage fallback. They are NOT cloud backups or authenticated teacher records. An export contains learning answers and should be kept private.</p>`;
+ openModal('Backup & Recovery',contents,`DEVELOPER TEST • PROFILE ${escapeHTML(slot)}`,'recovery');
+}
+async function saveRecoverySnapshot(){
+ if(state)save();
+ if(!state)return toast('Log in before creating a snapshot.',true);
+ const result=await VFIRecovery.snapshot(state,'manual');
+ if(result.ok){lastBackupAt=now();setSaveState('backed','✓ Saved locally · backup available');toast('Recovery snapshot created.');}
+ else toast('Could not create a local snapshot. Download a recovery file instead.',true);
+ showRecovery();
+}
+async function exportRecoveryFile(){
+ if(state)save();
+ const slot=recoverySlot();let p;
+ try{const raw=localStorage.getItem(STORAGE_PREFIX+slot);p=state&&state.id===slot?state:raw?VFIRecovery.migrateProfile(JSON.parse(raw),newProfile(slot),slot):null;
+  if(!p)throw Error('No profile exists.');
+  const archive=await VFIRecovery.getFullHistory(slot);
+  let words=[];try{words=JSON.parse(localStorage.getItem(BANK_KEY)||'[]')}catch(_){}
+  const bundle=VFIRecovery.createBundle(p,archive,words);
+  saveDownload(`Vocab_Farm_Offline_Recovery_${slot}_${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(bundle,null,2),'application/json');
+  toast('Recovery file downloaded. Keep it outside this browser.');
+ }catch(e){toast('Could not export recovery: '+e.message,true);}
+}
+async function previewRecoverySnapshot(id){
+ const slot=recoverySlot();try{
+  const {profile}=await VFIRecovery.getSnapshot(slot,id);
+  const raw=localStorage.getItem(STORAGE_PREFIX+slot);let current=null;
+  try{if(raw)current=VFIRecovery.migrateProfile(JSON.parse(raw),newProfile(slot),slot);}catch(_){}
+  openModal('Preview Recovery',`<p class="recovery-note">Review the differences before restoring. Nothing has changed yet.</p><div class="recovery-compare"><div><strong>Current</strong><p>${current?escapeHTML(recoverStats(current)):'Missing / unreadable'}</p></div><div><strong>Selected backup</strong><p>${escapeHTML(recoverStats(profile))}</p></div></div><div class="button-row"><button class="danger-btn" data-do="recovery-restore" data-snapshot="${escapeHTML(id)}">Restore this snapshot</button><button class="secondary-btn" data-do="recovery">Cancel</button></div><p class="fine-print">A pre-restore backup of the current valid save is required before overwriting it.</p>`,'NO CHANGES UNTIL CONFIRMED','recovery-preview');
+ }catch(e){toast('Invalid backup: '+e.message,true);showRecovery(slot);}
+}
+async function applyRecoveredProfile(slot,p,reason,archive=[],customWords=null){
+ const previous=localStorage.getItem(STORAGE_PREFIX+slot);
+ if(previous){
+  let validCurrent=null;
+  try{validCurrent=VFIRecovery.migrateProfile(JSON.parse(previous),newProfile(slot),slot);}catch(_){}
+  if(validCurrent){
+   const pre=await VFIRecovery.snapshot(validCurrent,'before-'+reason);
+   if(!pre.ok)throw Error('Could not back up the current save; restore cancelled.');
+  }else{
+   // Even invalid/corrupt data is never silently discarded. Preserve the raw text first.
+   try{localStorage.setItem('vfi_corrupt_pre_restore_'+slot,previous);}
+   catch(e){throw Error('Could not preserve the corrupt original save. Restore cancelled.');}
+  }
+ }
+ const migrated=VFIRecovery.migrateProfile(p,newProfile(slot),slot);
+ try{localStorage.setItem(STORAGE_PREFIX+slot,JSON.stringify(migrated));}catch(e){throw Error('Unable to write recovered save: '+e.message);}
+ // Do not let a background autosave overwrite the just-restored profile while the reload is pending.
+ if(state&&state.id===slot){playing=false;state=migrated;}
+ if(archive.length){await VFIRecovery.archiveExistingHistory(slot,archive);}
+ if(customWords&&Array.isArray(customWords)){try{localStorage.setItem(BANK_KEY,JSON.stringify(customWords));}catch(_) {}}
+ await VFIRecovery.snapshot(migrated,'after-'+reason);
+ closeModal();window.alert('Recovered test profile '+slot+'. Sign in again to load it.');window.location.reload();
+}
+async function restoreRecoverySnapshot(id){
+ const slot=recoverySlot();if(!window.confirm('Restore this backup for TEST PROFILE '+slot+'? The existing valid profile will first be backed up.'))return;
+ try{const {profile}=await VFIRecovery.getSnapshot(slot,id);await applyRecoveredProfile(slot,profile,'snapshot-restore');}
+ catch(e){toast('Restore cancelled: '+e.message,true);showRecovery(slot);}
+}
+async function handleRecoveryFile(e){
+ const file=e.target.files?.[0];e.target.value='';if(!file)return;
+ if(file.size>12_000_000)return toast('Recovery file is too large; nothing changed.',true);
+ try{
+  const parsed=JSON.parse(await file.text()),slot=recoverySlot();
+  pendingRecoveryImport={...VFIRecovery.parseBundle(parsed,slot),slot};
+  openModal('Preview Imported File',`<p class="recovery-note">Import targets the selected <strong>test profile ${escapeHTML(slot)}</strong>. It does not affect other accounts.</p><div class="recovery-current"><strong>Imported progress</strong><span>${escapeHTML(recoverStats(pendingRecoveryImport.profile))}</span></div><p>${pendingRecoveryImport.archive.length} archived question attempts included.</p><div class="button-row"><button class="danger-btn" data-do="recovery-import-confirm">Confirm import and restore</button><button class="secondary-btn" data-do="recovery">Cancel</button></div>`,'RECOVERY FILE VERIFIED','recovery-import-preview');
+ }catch(err){pendingRecoveryImport=null;toast('Recovery file rejected: '+err.message,true);}
+}
+async function confirmImportRecovery(){
+ const pkg=pendingRecoveryImport;if(!pkg)return;
+ if(!window.confirm('Import test profile '+pkg.slot+'? A backup of the existing valid profile will be created first.'))return;
+ try{await applyRecoveredProfile(pkg.slot,pkg.profile,'file-import',pkg.archive,pkg.customWords);}
+ catch(err){toast('Import stopped: '+err.message,true);}
+}
+async function deliberatelyStartFresh(){
+ const slot=recoverySlot();if(localStorage.getItem(STORAGE_PREFIX+slot))return toast('A primary save already exists; use reset in Developer Tools instead.',true);
+ if(!window.confirm('Create a brand NEW OFFLINE TEST profile '+slot+'? Existing local backups will remain available.'))return;
+ const fresh=newProfile(slot);try{localStorage.setItem(STORAGE_PREFIX+slot,JSON.stringify(fresh));await VFIRecovery.snapshot(fresh,'deliberate-new-profile');}
+ catch(e){return toast('Could not create new test profile: '+e.message,true);}
+ showRecovery(slot);toast('Fresh test profile created. Sign in to use it.');
+}
+
 // -------------------- Events, persistence, and frame loop --------------------
 function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(speaker){speakVocabularyWord(speaker.dataset.pronounce);return;}const option=e.target.closest('[data-choice]');if(option){chooseAnswer(Number(option.dataset.choice));return;}const btn=e.target.closest('[data-do]');if(!btn||btn.disabled)return;const action=btn.dataset.do,id=btn.dataset.crop,index=Number(btn.dataset.index);
+ if(ONLINE&&(action==='dev-tools'||action.startsWith('dev-')||action.startsWith('recovery')||action==='export-save'||action==='export-template')){toast('This tool is unavailable in the classroom.',true);return;}
  switch(action){
  case 'close':closeModal();break;
+ case 'dev-tools':showDevTools();break;
+ case 'dev-level':case 'dev-gold':case 'dev-seeds':case 'dev-fences':case 'dev-plots':case 'dev-ready':case 'dev-fast':case 'dev-limit':case 'dev-reset':devAction(action);break;
  case 'shop':showShop();break;
+ case 'decor-shop':showDecorationShop();break;
+ case 'buy-decor':buyDecoration(btn.dataset.item);break;
+ case 'buy-decor-pack':buyDecorationPack(btn.dataset.pack);break;
+ case 'sell-decor':showDecorSellConfirm(btn.dataset.item);break;
+ case 'sell-decor-confirm':sellDecoration(btn.dataset.item);break;
+ case 'sell-fence':showFenceSellConfirm();break;
+ case 'sell-fence-confirm':sellFence();break;
+ case 'place-decor':beginPlacement({kind:'decor',mode:'new',item:btn.dataset.item});break;
+ case 'move-decor':{const ix=Number(btn.dataset.decor),d=state.decorations[ix];if(d)beginPlacement({kind:'decor',mode:'move',index:ix,item:d.id});break;}
+ case 'remove-decor':removeDecoration(Number(btn.dataset.decor));break;
  case 'inventory':showInventory();break;
+ case 'owned-decorations':showOwnedDecorations();break;
+ case 'owned-seeds':showOwnedSeeds();break;
+ case 'seed-to-plot':showSeedPlotPicker(id);break;
+ case 'plant-from-inventory':closeModal();if(id==='special')plantSpecial(index);else plantCrop(index,id);break;
  case 'harbour':showHarbour();break;
  case 'house':showHouse();break;
  case 'missions':showMissions();break;
  case 'ranks':showRanks();break;
  case 'history':showHistory();break;
+ case 'recovery':showRecovery();break;
+ case 'recovery-snapshot':void saveRecoverySnapshot();break;
+ case 'recovery-export':void exportRecoveryFile();break;
+ case 'recovery-preview':void previewRecoverySnapshot(btn.dataset.snapshot);break;
+ case 'recovery-restore':void restoreRecoverySnapshot(btn.dataset.snapshot);break;
+ case 'recovery-import':$('recoveryFileInput').click();break;
+ case 'recovery-import-confirm':void confirmImportRecovery();break;
+ case 'recovery-start-new':void deliberatelyStartFresh();break;
+ case 'companions':showCompanions(btn.dataset.filter||'all');break;
+ case 'companion-detail':showCompanionDetail(btn.dataset.character);break;
+ case 'buy-special':buySpecialSeed();break;
+ case 'finish-special-reveal':finishSpecialReveal(index);break;
+ case 'buy-fence':buyFence();break;
+ case 'plant-special':plantSpecial(index);break;
+ case 'harvest-special':harvestSpecial(index);break;
+ case 'sell-pet':showPetExchangeConfirm(btn.dataset.pet);break;
+ case 'sell-pet-confirm':sellPet(btn.dataset.pet);break;
+ case 'place-fence':beginPlacement({kind:'fence',mode:'new',dir:'h'});break;
+ case 'rotate-fence':rotateFence(Number(btn.dataset.fence));break;
+ case 'fence-set-dir':setFenceOrientation(Number(btn.dataset.fence),btn.dataset.dir);break;
+ case 'move-fence':{const fence=state.fences[Number(btn.dataset.fence)];if(fence)beginPlacement({kind:'fence',mode:'move',index:Number(btn.dataset.fence),dir:fence.dir});break;}
+ case 'remove-fence':removeFence(Number(btn.dataset.fence));break;
   case 'buy':buySeed(id);break;
  case 'rescue':getRescue();break;
  case 'plant':plantCrop(index,id);break;
@@ -688,7 +1654,7 @@ function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(
  case 'export-template':exportTemplate();break;
  case 'sync-words':reloadOnlineWords();break;
  case 'sync-save':{save();flushOnline();toast('Sending progress to Google Sheets…');break;}
- case 'log-out':{save();if(ONLINE)flushOnline();closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;break;}
+ case 'log-out':{setPlacementMode(null);clearPendingPetTap();petSpeech=null;save();if(ONLINE)flushOnline();closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;break;}
  }
 }
 function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el.textContent=countdownLong(Number(el.dataset.until)-now());});document.querySelectorAll('.live-countdown,.retry-live').forEach(el=>{let left=Number(el.dataset.until)-now();el.textContent=formatSeconds(left);});
@@ -697,65 +1663,85 @@ function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el
  if($('orderCountdown'))$('orderCountdown').textContent=formatSeconds(state.ordersExpire-now());
  if(now()>=state.ordersExpire&&state.orders.length){initOrders();if(activeModal==='harbour')showHarbour();}
 }
-function frame(t){if(!playing)return;if(actionMotion)advanceFarmAction(t);const dt=Math.min(.055,(t-lastTime)/1000||0);lastTime=t;if($('modalOverlay').classList.contains('hidden'))updateMovement(dt);renderWorld();
+function frame(t){if(!playing)return;if(actionMotion)advanceFarmAction(t);const dt=Math.min(.055,(t-lastTime)/1000||0);lastTime=t;if($('modalOverlay').classList.contains('hidden'))updateMovement(dt);updateCompanions(dt);renderWorld();
  if(t-uiLast>450){const reset=syncDaily();if(reset&&activeModal==='missions')showMissions();updateHUD();liveCounters();uiLast=t;}
  if(t-saveLast>(ONLINE?18000:2500)){save();if(ONLINE)flushOnline();saveLast=t;}
  requestAnimationFrame(frame);}
 async function reloadOnlineWords(){if(!ONLINE||!onlineToken)return;
  try{const info=await serverCall('studentWords',onlineToken);bank=info.words||[];if(info.name){state.name=info.name;updateHUD();}toast(`Vocabulary updated: ${bank.length} words.`);showHistory();}
  catch(e){toast('Could not load words: '+e.message,true);}}
-function launchPlayer(slot){player={x:state.position?.x||880,y:state.position?.y||495,dir:'down',moving:false,frame:0,animMs:0};
+function launchPlayer(slot){ensureCompanionState();clearPendingPetTap();setPlacementMode(null);petSpeech=null;worldPointerDown=null;clearTimeout(worldLongTimer);player={x:state.position?.x||880,y:state.position?.y||495,dir:'down',moving:false,frame:0,animMs:0};
  if(!canStand(player.x,player.y)){const p=nearestValid({x:880,y:495});player.x=p.x;player.y=p.y;}
  initOrders();checkBadges();$('loginScreen').classList.add('hidden');$('gameShell').classList.remove('hidden');syncDaily();resize();camera.x=centeredCamera(player.x-viewW/(2*zoom),MAP.world.width,viewW/zoom);camera.y=centeredCamera(player.y-viewH/(2*zoom),MAP.world.height,viewH/zoom);
  preload();updateHUD();playing=true;lastTime=performance.now();requestAnimationFrame(frame);toast(`Welcome, ${state.name}!`);$('gameCanvas').focus();}
 async function beginGame(){const slot=$('studentSelect').value,pin=$('passcode').value;
  if(!/^\d{4}$/.test(pin)){$('loginError').textContent='Enter a 4-digit passcode.';return;}
  $('loginError').textContent='';$('playButton').disabled=true;
+ let existingSaveWasPresent=false;
  try{
   if(ONLINE){const resp=await serverCall('studentLogin',slot,pin);
    onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];bank=resp.words||[];
-   state=resp.profile||newProfile(slot);delete state.landTax;state.id=slot;state.version=2;
+   if(!resp.profile)throw Error('The online profile is unavailable. No replacement account will be created.');state=VFIRecovery.migrateProfile(resp.profile,newProfile(slot),slot);delete state.landTax;
    if(!state.plots||state.plots.length!==10)throw Error('Invalid online progress.');
   }else{
    if(pin!==String(Number(slot)).padStart(4,'0'))throw Error('Incorrect demo passcode.');
-   loadBank();state=readProfile(slot);
+   loadBank();
+   const raw=localStorage.getItem(STORAGE_PREFIX+slot);existingSaveWasPresent=raw!==null;
+   if(raw===null&&(await VFIRecovery.listSnapshots(slot)).length)throw Error('Earlier backups exist for this profile. Open Backup & Recovery instead of starting over.');
+   if(raw!==null){const oldBackup=await VFIRecovery.snapshotRaw(raw,slot,'before-v028-login');if(!oldBackup.ok)console.warn('Pre-login backup unavailable:',oldBackup.error);}
+   state=readProfile(slot);
   }
-  launchPlayer(slot);if(ONLINE&&bank.length===0)toast('Teacher has not added vocabulary yet. Please ask your teacher.',true);
+  launchPlayer(slot);
+  if(ONLINE)setSaveState('saved','✓ Loaded from Google Sheets');
+  if(!ONLINE){
+   void VFIRecovery.archiveExistingHistory(slot,state.history);
+   void makeSafeSnapshot('successful-login',true);
+   const previous=localStorage.getItem(LAST_BUILD_PREFIX+slot);
+   if(existingSaveWasPresent&&previous!==BUILD_ID)showUpdateNotice();
+   try{localStorage.setItem(LAST_BUILD_PREFIX+slot,BUILD_ID);}catch(_){}
+  }
+  if(ONLINE&&bank.length===0)toast('Teacher has not added vocabulary yet. Please ask your teacher.',true);
  }catch(e){$('loginError').textContent=e?.message||'Login failed. Try again.';}
  finally{$('playButton').disabled=false;}
 }
-function toggleTeacherAccess(){
- const panel=$('teacherAccessPanel');panel.classList.toggle('hidden');
- $('teacherDashboardButton').setAttribute('aria-expanded',String(!panel.classList.contains('hidden')));
-}
-function openPrivateTeacherSheet(){
- const input=$('teacherSheetUrl');const raw=(input.value||'').trim();
- if(!raw){window.open('https:' + String.fromCharCode(47,47) + 'docs.google.com/spreadsheets/u/0/','_blank','noopener,noreferrer');return;}
- try{const url=new URL(raw);if(url.protocol!=='https:'||url.hostname!=='docs.google.com'||!url.pathname.startsWith('/spreadsheets/d/'))throw Error('Invalid Sheet URL');
-  window.open(url.href,'_blank','noopener,noreferrer');
- }catch(_){$('teacherAccessError').textContent='Paste a valid private Google Sheets URL, or leave it blank to open Google Sheets.'}
-}
 function bindEvents(){resize();window.addEventListener('resize',resize);$('studentSelect').addEventListener('change',e=>{if(!ONLINE)$('demoPin').textContent=String(Number(e.target.value)).padStart(4,'0');$('loginError').textContent='';});
- $('teacherDashboardButton').addEventListener('click',toggleTeacherAccess);$('openTeacherSheetButton').addEventListener('click',openPrivateTeacherSheet);$('playButton').addEventListener('click',beginGame);$('passcode').addEventListener('keydown',e=>{if(e.key==='Enter')beginGame()});$('modalBody').addEventListener('click',dispatchClick);
+ $('playButton').addEventListener('click',beginGame);$('recoverLoginButton').addEventListener('click',()=>showRecovery($('studentSelect').value));$('recoveryFileInput').addEventListener('change',handleRecoveryFile);$('updateLater').addEventListener('click',hideUpdateNotice);$('updateBackup').addEventListener('click',()=>{hideUpdateNotice();showRecovery();});$('passcode').addEventListener('keydown',e=>{if(e.key==='Enter')beginGame()});$('modalBody').addEventListener('click',dispatchClick);
  $('modalClose').addEventListener('click',closeModal);
- $('modalOverlay').addEventListener('pointerdown',e=>{if(e.target===$('modalOverlay'))closeModal()});
+ $('modalOverlay').addEventListener('pointerdown',e=>{if(e.target===$('modalOverlay')&&activeModal!=='plant-exposure')closeModal()});
  $('zoomIn').addEventListener('click',()=>setZoom(zoom*1.25));
  $('zoomOut').addEventListener('click',()=>setZoom(zoom/1.25));
  $('zoomFit').addEventListener('click',()=>setZoom(mapFitZoom()));
  canvas.addEventListener('wheel',e=>{if(!playing)return;e.preventDefault();setZoom(zoom*(e.deltaY<0?1.15:1/1.15))},{passive:false});
- $('inventoryButton').addEventListener('click',showInventory);$('missionsButton').addEventListener('click',showMissions);$('historyButton').addEventListener('click',showHistory);
- document.querySelectorAll('[data-travel]').forEach(el=>el.addEventListener('click',()=>routeTo(el.dataset.travel)));
- $('actionButton').addEventListener('click',interact);
- canvas.addEventListener('pointerup',e=>{if(e.pointerType==='touch'&&Math.abs(e.clientX-(canvas._downX||e.clientX))>14)return;canvasTap(e)});
- canvas.addEventListener('pointerdown',e=>{canvas._downX=e.clientX;});
+ $('inventoryButton').addEventListener('click',showInventory);$('missionsButton').addEventListener('click',showMissions);$('historyButton').addEventListener('click',showHistory);$('devToolsButton').addEventListener('click',showDevTools);
+ document.querySelectorAll('[data-menu]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.menu==='decorations')showOwnedDecorations();else if(el.dataset.menu==='seeds')showOwnedSeeds();else if(el.dataset.menu==='collection')showCompanions();}));
+ $('actionButton').addEventListener('click',interact);$('placementCancel').addEventListener('click',cancelPlacement);
+ document.querySelectorAll('[data-fence-orient]').forEach(el=>el.addEventListener('click',()=>setFencePlacementOrientation(el.dataset.fenceOrient)));
+ canvas.addEventListener('contextmenu',e=>e.preventDefault());
+ canvas.addEventListener('pointerdown',e=>{
+  if(!playing||worldPointerDown||!e.isPrimary)return;
+  if(e.pointerType==='touch')e.preventDefault();
+  try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+  worldPointerDown={x:e.clientX,y:e.clientY,pointerId:e.pointerId,held:false,moved:false,point:worldPoint(e)};
+  if(worldLongTimer)clearTimeout(worldLongTimer);
+  worldLongTimer=setTimeout(()=>{if(!worldPointerDown||worldPointerDown.pointerId!==e.pointerId||worldPointerDown.moved)return;
+   if(handleWorldLongPress(worldPointerDown.point))worldPointerDown.held=true;
+  },550);
+ });
+ canvas.addEventListener('pointermove',e=>{if(placementMode?.kind==='fence')fencePlacementPreview=worldPoint(e);if(placementMode?.kind==='decor')decorationPlacementPreview=worldPoint(e);if(worldPointerDown?.pointerId===e.pointerId&&Math.hypot(e.clientX-worldPointerDown.x,e.clientY-worldPointerDown.y)>13){clearTimeout(worldLongTimer);worldPointerDown.moved=true;}});
+ canvas.addEventListener('pointerup',e=>{
+  clearTimeout(worldLongTimer);if(!worldPointerDown||worldPointerDown.pointerId!==e.pointerId)return;
+  const held=worldPointerDown.held,moved=worldPointerDown.moved;worldPointerDown=null;
+  try{if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);}catch(_){}
+  if(!held&&!moved)handleWorldTap(e);
+ });
+ canvas.addEventListener('pointercancel',e=>{if(worldPointerDown?.pointerId===e.pointerId){clearTimeout(worldLongTimer);worldPointerDown=null;}});
  document.querySelectorAll('[data-dir]').forEach(el=>{el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);touchDirs.add(el.dataset.dir);el.classList.add('pressed');});
  for(const ev of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(ev,()=>{touchDirs.delete(el.dataset.dir);el.classList.remove('pressed')});});
- window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('modalOverlay').classList.contains('hidden')){closeModal();e.preventDefault()}return;}
+ window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(placementMode){cancelPlacement();e.preventDefault();return;}if(!$('modalOverlay').classList.contains('hidden')){closeModal();e.preventDefault()}return;}
  const el=document.activeElement,editing=el&&(['INPUT','TEXTAREA','SELECT'].includes(el.tagName)||el.isContentEditable);if(editing||!playing||!$('modalOverlay').classList.contains('hidden'))return;
  const code=e.code;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD'].includes(code)){e.preventDefault();keys.add(code)}if(code==='KeyE'||code==='Space'){e.preventDefault();interact();}if(code==='KeyI'){e.preventDefault();showInventory();}});
  window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>{keys.clear();touchDirs.clear();if(playing){save();flushOnline()}});document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){save();flushOnline()}});window.addEventListener('beforeunload',()=>{if(playing){save();flushOnline()}});}
-if(ONLINE){document.querySelector('.demo-code')?.remove();$('passcode').placeholder='Your private 4-digit code';document.querySelector('.safety-note').textContent='Online classroom • Progress saved in private Google Sheets.';}
+if(ONLINE){document.querySelector('.demo-code')?.remove();$('passcode').placeholder='Your private 4-digit code';document.querySelector('.safety-note').textContent='Your progress is saved in your teacher’s private Google Sheet.';for(const id of ['devToolsButton','recoverLoginButton','updateNotice']){$(id)?.classList.add('hidden');}}
 bindEvents();
-// A diagnostic hook for local testing. It cannot change the game's real accounts because no backend exists.
-window.VocabFarmDebug={get state(){return state},get player(){return player},get map(){return MAP},get bank(){return bank},routeTo,walkable,pathfind,showShop,showPlot,showHarbour,showMissions};
+// No developer debug hook is exposed by the online classroom game.
 })();

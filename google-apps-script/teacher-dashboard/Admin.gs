@@ -86,30 +86,35 @@ function resetStudentProgress(teacherToken,id,typedId){
  requireTeacher_(teacherToken);id=ensureId_(id);
  if(String(typedId||'').trim()!==id)throw Error('Type the selected student ID to confirm the reset.');
  const ss=SpreadsheetApp.getActiveSpreadsheet(),account=accountRow_(ss,id),name=String(account.values[1]);
- const progress=ss.getSheetByName(PROGRESS),history=ss.getSheetByName(HISTORY);
+ const progress=ss.getSheetByName(PROGRESS),history=ss.getSheetByName(HISTORY),magic=ss.getSheetByName('_MagicLedger');
  if(!progress||!history)throw Error('Run Set up Sheets first.');
  const progressRows=progress.getDataRange().getValues();
  let progressRow=0,oldRevision=0,oldProgress=null;
  for(let i=1;i<progressRows.length;i++)if(String(progressRows[i][0]).padStart(2,'0')===id){progressRow=i+1;oldRevision=Number(progressRows[i][1])||0;oldProgress=progressRows[i];break;}
  const historyRows=history.getDataRange().getValues(),historyIndexes=[],oldHistory=[];
  for(let i=1;i<historyRows.length;i++)if(String(historyRows[i][2]).padStart(2,'0')===id){historyIndexes.push(i+1);oldHistory.push({row:i+1,values:historyRows[i]});}
+ const magicIndexes=[],oldMagic=[];
+ if(magic){const rows=magic.getDataRange().getValues();for(let i=1;i<rows.length;i++)if(String(rows[i][1]).padStart(2,'0')===id){magicIndexes.push(i+1);oldMagic.push({row:i+1,values:rows[i]});}}
  const archive=createSheet_(ss,'_ResetArchive',['Reset ID','Reset at','Student ID','Student name','Source sheet','Original row','A','B','C','D','E','F','G','H','I','J','K']);
  const resetId=Utilities.getUuid(),resetAt=new Date();
  const archived=[];
  if(oldProgress)archived.push([resetId,resetAt,id,name,PROGRESS,progressRow,...oldProgress,...Array(11-oldProgress.length).fill('')]);
  for(const entry of oldHistory)archived.push([resetId,resetAt,id,name,HISTORY,entry.row,...entry.values,...Array(11-entry.values.length).fill('')]);
+ for(const entry of oldMagic)archived.push([resetId,resetAt,id,name,'_MagicLedger',entry.row,...entry.values,...Array(11-entry.values.length).fill('')]);
  if(!archived.length)archived.push([resetId,resetAt,id,name,'No previous progress',0,...Array(11).fill('')]);
  for(let i=0;i<archived.length;i+=200)archive.getRange(archive.getLastRow()+1,1,Math.min(200,archived.length-i),17).setValues(archived.slice(i,i+200));
  // Invalidate open student sessions without changing the four-digit passcode.
  account.sheet.getRange(account.row,7,1,2).setValues([[Number(account.values[6]||1)+1,resetAt]]);
- const fresh={version:2,id,name,gold:30,level:1,xp:0,xpTotal:0,seeds:{carrot:2},harvest:{},
+ const fresh={version:2,saveSchemaVersion:1,id,name,gold:30,level:1,xp:0,xpTotal:0,seeds:{carrot:2},harvest:{},
+   companions:[],discovered:[],fences:[],fenceStock:0,decorations:[],decorStock:{},specialSeedLastPurchase:'',
    plots:Array.from({length:10},(_,i)=>({unlocked:i<2,crop:null})),orders:[],ordersExpire:0,
    lastWords:[],history:[],sales:[],badges:[],daily:{day:'',answers:{},correct:0},weekly:{week:'',answers:{},correct:0},
    position:{x:880,y:495},settings:{fastDemo:false},savedAt:Date.now()};
  const record=[id,oldRevision+1,JSON.stringify(fresh),resetAt,'[]'];
  if(progressRow)progress.getRange(progressRow,1,1,5).setValues([record]);else progress.appendRow(record);
  for(let i=historyIndexes.length-1;i>=0;){let end=historyIndexes[i],start=end;i--;while(i>=0&&historyIndexes[i]===start-1){start=historyIndexes[i];i--;}history.deleteRows(start,end-start+1);}
- return {id,name,archivedAnswers:oldHistory.length,resetId};
+ if(magic)for(let i=magicIndexes.length-1;i>=0;){let end=magicIndexes[i],start=end;i--;while(i>=0&&magicIndexes[i]===start-1){start=magicIndexes[i];i--;}magic.deleteRows(start,end-start+1);}
+ return {id,name,archivedAnswers:oldHistory.length,archivedMagicEvents:oldMagic.length,resetId};
 }
 
 /** Sidebar-only teacher controls. Both calls require the teacher PIN session. */

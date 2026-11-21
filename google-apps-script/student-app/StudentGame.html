@@ -2,21 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes, maximum-scale=5">
   <meta name="theme-color" content="#4d8f5b">
-  <title>Vocab Farm Island — Classroom Game v0.13</title>
+  <title>Vocab Farm Island</title>
   <base href="<?= assetBaseUrl ?>">
   <style><?!= include("Stylesheet"); ?></style>
-
 </head>
 <body>
   <main id="loginScreen" class="login-screen">
     <div class="login-background" aria-hidden="true"></div>
     <div class="login-card">
       <img class="game-logo" src="assets/ui/login/game_logo.png" alt="Vocab Farm Island">
-      
-      <h1>Welcome to your island!</h1>
-      <p>Choose your profile and enter your passcode.</p>
+
+      <h1>Welcome to Vocab Farm Island!</h1>
+      <p>Log in to continue your saved island and vocabulary progress.</p>
       <div class="login-fields">
         <label for="studentSelect">Student profile</label>
         <select id="studentSelect" aria-label="Student profile">
@@ -26,25 +25,13 @@
           <option value="07">Student 07</option><option value="08">Student 08</option>
           <option value="09">Student 09</option><option value="10">Student 10</option>
         </select>
-        <label for="passcode">4-digit student passcode</label>
+        <label for="passcode">Private 4-digit passcode</label>
         <input id="passcode" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off" placeholder="4 digits" aria-label="Demo passcode">
-        <p class="demo-code">Demo code for this profile: <strong id="demoPin">0001</strong></p>
         <p id="loginError" class="field-error" role="alert"></p>
         <button id="playButton" class="primary-btn full-btn" type="button">🌿 Enter the Island</button>
+        <button id="recoverLoginButton" class="secondary-btn full-btn" type="button">🛟 Recover an existing test profile</button>
       </div>
-      <div class="teacher-launch">
-        <button id="teacherDashboardButton" class="secondary-btn teacher-entry-btn" type="button" aria-expanded="false" aria-controls="teacherAccessPanel">👩‍🏫 Teacher dashboard · Giáo viên</button>
-        <div id="teacherAccessPanel" class="teacher-access-panel hidden">
-          <strong>Private teacher dashboard · Trang giáo viên</strong>
-          <p>Open your private Google Sheet. Then choose <strong>Vocab Farm → Open Teacher Dashboard</strong>.</p>
-          <label for="teacherSheetUrl">Private Google Sheet link (optional)</label>
-          <input id="teacherSheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off">
-          <button id="openTeacherSheetButton" type="button" class="secondary-btn">Open Google Sheets ↗</button>
-          <p id="teacherAccessError" role="alert"></p>
-          <small>Only your Google account can grant access. The private teacher dashboard asks for a 6-digit PIN. No PIN is stored in the public game.</small>
-        </div>
-      </div>
-      <p class="safety-note">Offline demo · Progress saves on this device only.</p>
+      <p class="safety-note">Your progress is saved in your teacher's private Google Sheet.</p>
     </div>
   </main>
 
@@ -59,22 +46,31 @@
         <div class="hud-gold"><img src="assets/items/currency/64/gold_coin.png" alt=""> <strong id="hudGold">30</strong><span> gold</span></div>
         <div class="xp-line"><span>XP</span><span id="hudXPLabel">0 / 50</span></div>
         <div class="xp-track"><div id="hudXPBar"></div></div>
+        <div class="hud-save-state" id="saveStatus" data-state="saved" role="status" aria-live="polite">○ Save not checked</div>
       </div>
     </header>
     <nav class="top-buttons" aria-label="Game menus">
       <button class="icon-btn" id="inventoryButton" title="Inventory (I)"><img src="assets/ui/icons/64/icon_inventory.png" alt=""><span>Bag</span></button>
       <button class="icon-btn" id="missionsButton" title="Daily and weekly challenges"><img src="assets/ui/badges/64/badge_daily.png" alt=""><span>Daily/Weekly</span></button>
       <button class="icon-btn" id="historyButton" title="Learning history"><span class="icon-emoji">📖</span><span>Words</span></button>
+      <button class="icon-btn dev-menu-btn" id="devToolsButton" title="Developer Test Tools" type="button"><span class="icon-emoji">🧪</span><span>Dev Tools</span></button>
     </nav>
 
+    <div id="updateNotice" class="safe-update-notice hidden" role="status"><strong>New test version available</strong><span>Your local save is retained. Make a recovery copy before future updates.</span><button id="updateBackup" type="button">Backup</button><button id="updateLater" type="button">Later</button></div>
+    <div class="developer-watermark" aria-label="Offline Developer Test Edition">DEVELOPER TEST · LOCAL ONLY</div>
     <div id="areaHint" class="area-hint" aria-live="polite"><span class="area-dot"></span><span id="areaName">Main Island</span></div>
+    <button id="placementCancel" type="button" class="placement-cancel hidden" aria-live="polite">✕ Cancel placement · Hủy đặt</button>
+    <div id="fenceOrientation" class="fence-orientation hidden" role="group" aria-label="Fence orientation before placement">
+      <button type="button" data-fence-orient="h" aria-pressed="true">↔ Horizontal · Ngang</button>
+      <button type="button" data-fence-orient="v" aria-pressed="false">↕ Vertical · Dọc</button>
+    </div>
+    <div id="petSpeechBubble" class="pet-speech-bubble hidden" aria-live="polite"><span id="petSpeechText"></span></div>
     <div id="worldNotice" class="world-notice hidden" aria-live="polite"></div>
 
-    <nav class="travel-nav" aria-label="Quick travel">
-      <button data-travel="farm">🌱 <span>Farm</span></button>
-      <button data-travel="shop">🛒 <span>Seed shop</span></button>
-      <button data-travel="harbour">⛵ <span>Harbour</span></button>
-      <button data-travel="house">🏡 <span>House</span></button>
+    <nav class="travel-nav quick-menus-v023" aria-label="Island menus">
+      <button type="button" data-menu="decorations" title="View your owned decorations and fences. Place an item, then press and hold it on the island to move or return it.">🌺 <span>Decorations</span></button>
+      <button type="button" data-menu="seeds" title="View your owned regular seeds and Special Seeds, then choose an empty planting plot.">🌱 <span>Seeds</span></button>
+      <button type="button" data-menu="collection" title="View your magical companion collection.">⭐ <span>Collection</span></button>
     </nav>
     <nav class="zoom-controls" aria-label="Map zoom controls">
       <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
@@ -96,14 +92,15 @@
   </main>
 
   <div id="modalOverlay" class="modal-overlay hidden" role="presentation">
-    <div class="modal" id="modalPanel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal" id="modalPanel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-heading"><div><p class="eyebrow" id="modalEyebrow">VOCAB FARM ISLAND</p><h2 id="modalTitle">Island</h2></div><button class="close-btn" id="modalClose" type="button" aria-label="Close window">×</button></div>
       <div id="modalBody" class="modal-body"></div>
     </div>
   </div>
-  <noscript>This game needs JavaScript. Please enable JavaScript in your browser.</noscript>
-  <script>window.FARM_ONLINE = true;</script>
+  <input id="recoveryFileInput" type="file" accept=".json,application/json" hidden aria-label="Import offline recovery file">
   <script><?!= include("MapConfig"); ?></script>
+  <script><?!= include("RecoveryCode"); ?></script>
   <script><?!= include("GameCode"); ?></script>
+  <noscript>This game needs JavaScript. Please enable JavaScript in your browser.</noscript>
 </body>
 </html>
