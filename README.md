@@ -19,6 +19,7 @@ The live student Apps Script project is `Vocab Farm Student Game`. Its private S
 
 ## Code and updates
 
+- [v0.30 staging](staging/v0.30/README.md) contains the updated student game, its new assets, source audit, and migration notes. It is source for a separate test deployment; the official link above still serves v0.13.
 - `google-apps-script/student-app/` contains the live web app source. After editing it, copy changed files into the Apps Script project and **deploy a new version of the existing web app deployment**.
 - `google-apps-script/teacher-dashboard/` contains the separate Sheet-bound teacher dashboard source.
 - `game.js`, `style.css`, and `map-config.js` power `demo.html`; keep gameplay changes aligned with the student app files.
