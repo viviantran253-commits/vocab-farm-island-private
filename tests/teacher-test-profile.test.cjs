@@ -8,7 +8,7 @@ class Sheet {
   getDataRange() { return { getValues: () => this.rows.map(row => row.slice()) }; }
   getLastRow() { return this.rows.length; }
   getRange(row, col, height = 1, width = 1) {
-    return { setValues: values => {
+    return { getValue: () => this.rows[row - 1]?.[col - 1], setValue: value => { const target = this.rows[row - 1] || (this.rows[row - 1] = []); target[col - 1] = value; }, getValues: () => Array.from({ length: height }, (_, i) => Array.from({ length: width }, (_, j) => this.rows[row - 1 + i]?.[col - 1 + j])), setValues: values => {
       for (let i = 0; i < height; i++) {
         const target = this.rows[row - 1 + i] || (this.rows[row - 1 + i] = []);
         for (let j = 0; j < width; j++) target[col - 1 + j] = values[i][j];
@@ -43,6 +43,7 @@ test('teacher creates an isolated profile once, without changing students', () =
   assert.equal(sheets._Students.rows[1][1], 'Student 01');
   assert.equal(sheets._Students.rows[2][0], '11');
   assert.equal(sheets._Students.rows[2][3], 'hashed-pin');
+  assert.equal(sheets._Students.rows[2][8], 11);
   assert.equal(sheets.Vocab_11.rows.length, 7);
   assert.equal(context.createTeacherTestProfile('teacher-token').created, false);
   assert.equal(sheets._Students.rows.length, 3);

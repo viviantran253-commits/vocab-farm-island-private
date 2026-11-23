@@ -1,4 +1,4 @@
-# Vocab Farm Island — classroom game v0.43
+# Vocab Farm Island — classroom game v0.44
 
 ## Play
 
@@ -18,6 +18,10 @@ Adding new shop items later does not itself clear saved progress. Keep the exist
 For private feature testing, unlock the teacher dashboard and choose **Create teacher test profile (11)**. Record the generated four-digit passcode. Profile 11 has its own `Vocab_11` sample words and saved progress. Sign in to the usual student link as **Teacher Test (11)** to use its test controls for gold, level, resources, plot unlocks, and growth timers. The controls affect only profile 11. To start it over, use the dashboard reset for ID 11.
 
 The live student Apps Script project is `Vocab Farm Student Game`. Its private Script Properties hold `SHEET_ID` and `ASSET_BASE_URL`. Its web app runs as the teacher account and allows anyone to open the login page; access to each profile requires its passcode. The GitHub Pages site hosts artwork and routes visitors to that web app. No Sheet ID or PIN is stored in public source.
+
+### Student login numbers
+
+Students type their number and private four-digit passcode on the login page. In the teacher's private Google Sheet, open the `_Students` tab and edit column **I, Login number**. Each number must be unique and between 1 and 999999. Student 01 starts with login number `1`, Student 02 with `2`, and the teacher test profile with `11`. Refresh the teacher dashboard to see the numbers there. Changing a login number does not change the permanent student ID in column A, passcode, vocabulary, answer history, or saved game progress. Give the student their new number privately. If two students have the same login number, login is blocked until the teacher fixes it.
 
 ## Code and updates
 

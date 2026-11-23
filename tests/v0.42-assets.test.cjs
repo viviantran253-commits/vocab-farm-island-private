@@ -23,10 +23,10 @@ test('all 22 server companions have complete public sprite sets', () => {
 });
 
 test('production UI keeps classroom login and has new map controls', () => {
-  assert.match(html, /<select id="studentSelect"/);
+  assert.match(html, /<input id="studentSelect" type="text" inputmode="numeric"/);
   assert.match(html, /id="zoomFollow"/);
   assert.match(game, /const ONLINE = true;/);
-  assert.match(game, /const BUILD_ID='v0\.43'/);
+  assert.match(game, /const BUILD_ID='v0\.44'/);
   assert.doesNotMatch(server, /STAGING_MODE|STAGING_SHEET_ID/);
   assert.doesNotMatch(html, /Staging Candidate|private test Google Sheet/);
   assert.doesNotMatch(game, /Staging classroom/);

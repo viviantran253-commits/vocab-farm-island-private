@@ -156,7 +156,7 @@ const PLOT_UNLOCKS = [
   {level:15, price:700},{level:20, price:800}
 ];
 const STORAGE_PREFIX = 'vocabFarmDeveloperTest_v1_'; // SAME v0.18–v0.27 prefix: no forced reset
-const BUILD_ID='v0.43',BACKUP_EVERY_MS=10*60*1000;
+const BUILD_ID='v0.44',BACKUP_EVERY_MS=10*60*1000;
 const LAST_BUILD_PREFIX='vfi_last_build_v1_';
 let lastBackupAt=0,backupRunning=false,lastSaveErrorAt=0,pendingRecoveryImport=null;
 const BANK_KEY = 'vocabFarmDeveloperCustomBank_v1';
@@ -1829,22 +1829,24 @@ function launchPlayer(slot){cameraManual=false;ensureCompanionState();clearPendi
  initOrders();checkBadges();$('loginScreen').classList.add('hidden');$('gameShell').classList.remove('hidden');syncDaily();resize();camera.x=centeredCamera(player.x-viewW/(2*zoom),MAP.world.width,viewW/zoom);camera.y=centeredCamera(player.y-viewH/(2*zoom),MAP.world.height,viewH/zoom);
  preload();updateHUD();playing=true;lastTime=performance.now();requestAnimationFrame(frame);toast(`Welcome, ${state.name}!`);$('gameCanvas').focus();}
 function loginIdToInternal_(loginId){
- if(!/^\d{2}$/.test(loginId)||loginId==='00')throw Error('Choose a valid student profile.');
- return loginId;
+ if(!/^\d{1,6}$/.test(loginId)||Number(loginId)<1)throw Error('Enter your student number (1–6 digits).');
+ return String(Number(loginId)).padStart(2,'0');
 }
 async function beginGame(){let slot;const loginId=$('studentSelect').value.trim(),pin=$('passcode').value;
- try{slot=loginIdToInternal_(loginId);}catch(e){$('loginError').textContent=e.message;return;}
+ try{loginIdToInternal_(loginId);}catch(e){$('loginError').textContent=e.message;return;}
 
  if(!/^\d{4}$/.test(pin)){$('loginError').textContent='Enter a 4-digit passcode.';return;}
  $('loginError').textContent='';$('playButton').disabled=true;
  let existingSaveWasPresent=false;
  try{
-  if(ONLINE){const resp=await serverCall('studentLogin',slot,pin);
+  if(ONLINE){const resp=await serverCall('studentLogin',loginId,pin);
+   slot=String(resp.profile?.id||'');if(!/^0[1-9]$|^1[01]$/.test(slot))throw Error('The online profile is unavailable. Please contact your teacher.');
    onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];bank=resp.words||[];
    onlineTestMode=resp.testMode===true&&slot==='11';document.body.classList.toggle('teacher-test-mode',onlineTestMode);$('devToolsButton').classList.toggle('hidden',!onlineTestMode);
    if(!resp.profile)throw Error('The online profile is unavailable. No replacement account will be created.');state=VFIRecovery.migrateProfile(resp.profile,newProfile(slot),slot);delete state.landTax;
    if(!state.plots||state.plots.length!==10)throw Error('Invalid online progress.');
   }else{
+   slot=loginIdToInternal_(loginId);
    if(pin!==String(Number(slot)).padStart(4,'0'))throw Error('Incorrect demo passcode.');
    loadBank();
    const raw=localStorage.getItem(STORAGE_PREFIX+slot);existingSaveWasPresent=raw!==null;
@@ -1865,7 +1867,7 @@ async function beginGame(){let slot;const loginId=$('studentSelect').value.trim(
  }catch(e){$('loginError').textContent=e?.message||'Login failed. Try again.';}
  finally{$('playButton').disabled=false;}
 }
-function bindEvents(){resize();window.addEventListener('resize',resize);$('studentSelect').addEventListener('change',e=>{const demo=$('demoPin');if(!ONLINE&&demo)demo.textContent=String(Number(e.target.value)||1).padStart(4,'0');$('loginError').textContent='';});
+function bindEvents(){resize();window.addEventListener('resize',resize);$('studentSelect').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);const demo=$('demoPin');if(!ONLINE&&demo)demo.textContent=String(Number(e.target.value)||1).padStart(4,'0');$('loginError').textContent='';});
  $('playButton').addEventListener('click',beginGame);$('recoverLoginButton').addEventListener('click',()=>{try{showRecovery(recoverySlot());}catch(e){$('loginError').textContent=e.message}});$('recoveryFileInput').addEventListener('change',handleRecoveryFile);$('updateLater').addEventListener('click',hideUpdateNotice);$('updateBackup').addEventListener('click',()=>{hideUpdateNotice();showRecovery();});$('passcode').addEventListener('keydown',e=>{if(e.key==='Enter')beginGame()});$('modalBody').addEventListener('click',dispatchClick);
  $('modalClose').addEventListener('click',closeModal);
  $('modalOverlay').addEventListener('pointerdown',e=>{if(e.target===$('modalOverlay')&&activeModal!=='plant-exposure')closeModal()});

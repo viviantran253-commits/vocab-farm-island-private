@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.43: official student web app.
+/** Vocab Farm Island v0.44: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -39,6 +39,27 @@ function findAccount_(sheet,id){
   const rows=sheet.getDataRange().getValues();
   for(let i=1;i<rows.length;i++) if(String(rows[i][0]).padStart(2,'0')===id)return {row:i+1,v:rows[i]};
   throw new Error('Student ID was not found.');
+}
+
+// Column I is an editable login number. Column A remains the permanent account ID
+// used by progress, vocabulary, history and sessions.
+function canonicalLoginNumber_(value){
+ const raw=String(value===null||value===undefined?'':value).trim();
+ return /^\d{1,6}$/.test(raw)&&Number(raw)>0?String(Number(raw)):null;
+}
+function findAccountByLoginNumber_(sheet,number){
+ const key=canonicalLoginNumber_(number);
+ if(!key)throw Error('Enter your student number (1–6 digits).');
+ const rows=sheet.getDataRange().getValues();let found=null;
+ for(let i=1;i<rows.length;i++){
+  const row=rows[i],id=String(row[0]).padStart(2,'0');
+  const assigned=row[8]===undefined||String(row[8]).trim()===''?id:row[8];
+  if(canonicalLoginNumber_(assigned)!==key)continue;
+  if(found)throw Error('This student number is assigned twice. Please ask your teacher to fix column I in _Students.');
+  found={row:i+1,v:row,id};
+ }
+ if(!found)throw Error('Student number was not found. Please ask your teacher.');
+ return found;
 }
 
 function hashPin_(salt,pin) {
@@ -112,10 +133,9 @@ function readProgress_(ss,id,name){
  return {row:null,revision:0,profile:freshProfile_(id,name),seen:[]};
 }
 
-function studentLogin(studentId,pin){
- const id=String(studentId||'').padStart(2,'0');
- if(!/^\d{2}$/.test(id)||!/^\d{4}$/.test(String(pin)))throw Error('Enter a valid student ID and four-digit passcode.');
- const ss=data_(),acSheet=tab_(ss,ACCOUNTS_TAB),acct=findAccount_(acSheet,id),v=acct.v;
+function studentLogin(loginNumber,pin){
+ if(!canonicalLoginNumber_(loginNumber)||!/^\d{4}$/.test(String(pin)))throw Error('Enter your student number and four-digit passcode.');
+ const ss=data_(),acSheet=tab_(ss,ACCOUNTS_TAB),acct=findAccountByLoginNumber_(acSheet,loginNumber),id=acct.id,v=acct.v;
  const lock=LockService.getScriptLock();lock.waitLock(15000);
  try{
   const latest=findAccount_(acSheet,id).v;

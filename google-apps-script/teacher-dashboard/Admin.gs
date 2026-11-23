@@ -46,9 +46,18 @@ function requireTeacher_(token){
 }
 function createSheet_(ss,name,header){let s=ss.getSheetByName(name);if(!s){s=ss.insertSheet(name);s.appendRow(header);s.setFrozenRows(1);s.getRange(1,1,1,header.length).setFontWeight('bold').setBackground('#e3f1d9');}return s;}
 function sha_(salt,pin){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+pin).map(x=>('0'+((x+256)%256).toString(16)).slice(-2)).join('');}
+function ensureLoginNumbers_(accounts){
+ if(String(accounts.getRange(1,9).getValue()).trim()!=='Login number')accounts.getRange(1,9).setValue('Login number');
+ const last=accounts.getLastRow();if(last<2)return;
+ const rows=accounts.getRange(2,1,last-1,9).getValues();
+ for(let i=0;i<rows.length;i++)if(String(rows[i][8]??'').trim()===''){
+  const id=String(rows[i][0]).padStart(2,'0');
+  if(/^0[1-9]$|^1[01]$/.test(id))accounts.getRange(i+2,9).setValue(Number(id));
+ }
+}
 function setupVocabFarm(teacherToken){requireTeacher_(teacherToken);
  const ss=SpreadsheetApp.getActiveSpreadsheet();
- const accounts=createSheet_(ss,STUDENTS,['Student ID','Display name','PIN salt','PIN hash','Failed attempts','Locked until','PIN version','Updated']);
+ const accounts=createSheet_(ss,STUDENTS,['Student ID','Display name','PIN salt','PIN hash','Failed attempts','Locked until','PIN version','Updated','Login number']);
  createSheet_(ss,PROGRESS,['Student ID','Revision','Progress JSON','Updated','Seen history event IDs']);
  createSheet_(ss,HISTORY,['Event ID','Time','Student ID','Student name','Source','Activity','Word','Submitted answer','Correct answer','Result','Attempt']);
  const existing=accounts.getLastRow()>1?accounts.getRange(2,1,accounts.getLastRow()-1,1).getValues().flat().map(x=>String(x).padStart(2,'0')):[];
@@ -59,11 +68,12 @@ function setupVocabFarm(teacherToken){requireTeacher_(teacherToken);
   vocabulary.setColumnWidths(1,5,170);
   if(!existing.includes(id)){
    const pin=String(Math.floor(Math.random()*9000)+1000);const salt=Utilities.getUuid();
-   accounts.appendRow([id,'Student '+id,salt,sha_(salt,pin),0,0,1,new Date()]);
+   accounts.appendRow([id,'Student '+id,salt,sha_(salt,pin),0,0,1,new Date(),i]);
    created.push({id,pin});
   }
  }
  accounts.hideColumns(3,2);
+ ensureLoginNumbers_(accounts);
  return {created,ready:true,studentCount:10,detail:'Passcodes are shown only once. Record them privately; reset if lost.'};
 }
 /** Create a separate test account without changing any of the ten student accounts. */
@@ -73,6 +83,7 @@ function createTeacherTestProfile(teacherToken){
  try{
   const ss=SpreadsheetApp.getActiveSpreadsheet(),accounts=ss.getSheetByName(STUDENTS);
   if(!accounts||!ss.getSheetByName(PROGRESS)||!ss.getSheetByName(HISTORY))throw Error('Run Set up Sheets first.');
+  ensureLoginNumbers_(accounts);
   const existing=accounts.getDataRange().getValues().slice(1).some(r=>String(r[0]).padStart(2,'0')===TEACHER_TEST_ID);
   if(existing)return {created:false,id:TEACHER_TEST_ID,message:'Teacher test profile already exists. Select it in the dashboard to reset its passcode if needed.'};
   const vocab=createSheet_(ss,'Vocab_'+TEACHER_TEST_ID,HEADERS);
@@ -86,7 +97,7 @@ function createTeacherTestProfile(teacherToken){
    ['plant','/plɑːnt/','v','trồng','We plant seeds. (Chúng tôi trồng hạt giống.)']
   ]);
   const pin=String(Math.floor(Math.random()*9000)+1000),salt=Utilities.getUuid();
-  accounts.appendRow([TEACHER_TEST_ID,'Teacher Test',salt,sha_(salt,pin),0,0,1,new Date()]);
+  accounts.appendRow([TEACHER_TEST_ID,'Teacher Test',salt,sha_(salt,pin),0,0,1,new Date(),11]);
   accounts.hideColumns(3,2);
   return {created:true,id:TEACHER_TEST_ID,pin,message:'Record this private passcode now. It will not be shown again.'};
  }finally{lock.releaseLock();}
@@ -95,11 +106,12 @@ function ensureId_(id){id=String(id||'').padStart(2,'0');if(!/^0[1-9]$|^1[01]$/.
 function accountRow_(ss,id){const s=ss.getSheetByName(STUDENTS);if(!s)throw Error('Run setup first.');const all=s.getDataRange().getValues();for(let i=1;i<all.length;i++)if(String(all[i][0]).padStart(2,'0')===id)return {sheet:s,row:i+1,values:all[i]};throw Error('Student not found.');}
 function studentSummary(teacherToken){requireTeacher_(teacherToken);
  const ss=SpreadsheetApp.getActiveSpreadsheet();if(!ss.getSheetByName(STUDENTS))return {needsSetup:true,students:[]};
- const rows=ss.getSheetByName(STUDENTS).getDataRange().getValues().slice(1);
+ const accounts=ss.getSheetByName(STUDENTS);ensureLoginNumbers_(accounts);
+ const rows=accounts.getDataRange().getValues().slice(1);
  const saves=ss.getSheetByName(PROGRESS).getDataRange().getValues().slice(1),saved={};for(const v of saves)try{saved[String(v[0]).padStart(2,'0')]=JSON.parse(String(v[2]));}catch(e){}
  const logs=ss.getSheetByName(HISTORY).getDataRange().getValues().slice(1),stats={};
  for(const r of logs){const id=String(r[2]).padStart(2,'0');if(!stats[id])stats[id]={total:0,correct:0,wrong:0,unverified:0};stats[id].total++;if(r[9]==='Correct')stats[id].correct++;else if(r[9]==='Wrong')stats[id].wrong++;else stats[id].unverified++;}
- return {students:rows.map(r=>{const id=String(r[0]).padStart(2,'0'),p=saved[id]||{},vocab=ss.getSheetByName('Vocab_'+id);return {id,name:String(r[1]),level:p.level||1,gold:p.gold||0,xp:p.xpTotal||0,words:vocab?Math.max(0,vocab.getLastRow()-1):0,plotsUnlocked:Array.isArray(p.plots)?p.plots.filter(x=>x.unlocked).length:2,cropsGrowing:Array.isArray(p.plots)?p.plots.filter(x=>!!x.crop).length:0,harvested:Object.values(p.harvest||{}).reduce((a,b)=>a+(Number(b)||0),0),badges:(p.badges||[]).length,...(stats[id]||{total:0,correct:0,wrong:0,unverified:0}),lastSaved:p.savedAt||0};})};
+ return {students:rows.map(r=>{const id=String(r[0]).padStart(2,'0'),p=saved[id]||{},vocab=ss.getSheetByName('Vocab_'+id);return {id,name:String(r[1]),loginNumber:String(r[8]??Number(id)),level:p.level||1,gold:p.gold||0,xp:p.xpTotal||0,words:vocab?Math.max(0,vocab.getLastRow()-1):0,plotsUnlocked:Array.isArray(p.plots)?p.plots.filter(x=>x.unlocked).length:2,cropsGrowing:Array.isArray(p.plots)?p.plots.filter(x=>!!x.crop).length:0,harvested:Object.values(p.harvest||{}).reduce((a,b)=>a+(Number(b)||0),0),badges:(p.badges||[]).length,...(stats[id]||{total:0,correct:0,wrong:0,unverified:0}),lastSaved:p.savedAt||0};})};
 }
 function studentHistory(teacherToken,id,max){requireTeacher_(teacherToken);id=ensureId_(id);const ss=SpreadsheetApp.getActiveSpreadsheet(),sh=ss.getSheetByName(HISTORY);if(!sh)return [];const rows=sh.getDataRange().getValues().slice(1).filter(r=>String(r[2]).padStart(2,'0')===id);return rows.slice(-Math.min(500,Number(max)||150)).reverse().map(r=>({time:r[1] instanceof Date?r[1].toISOString():String(r[1]),source:String(r[4]),stage:String(r[5]),word:String(r[6]),answer:String(r[7]),expected:String(r[8]),result:String(r[9]),attempt:Number(r[10])||1}));}
 function changeStudentName(teacherToken,id,name){requireTeacher_(teacherToken);id=ensureId_(id);name=String(name||'').trim();if(!name||name.length>28)throw Error('Name must be 1–28 characters.');const ss=SpreadsheetApp.getActiveSpreadsheet(),a=accountRow_(ss,id);a.sheet.getRange(a.row,2).setValue(name);a.sheet.getRange(a.row,8).setValue(new Date());return {id,name};}

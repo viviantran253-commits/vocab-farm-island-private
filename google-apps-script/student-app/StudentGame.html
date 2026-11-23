@@ -17,15 +17,8 @@
       <h1>Welcome to Vocab Farm Island!</h1>
       <p>Log in to continue your saved island and vocabulary progress.</p>
       <div class="login-fields">
-        <label for="studentSelect">Student profile</label>
-        <select id="studentSelect" aria-label="Student profile">
-          <option value="01">Student 01</option><option value="02">Student 02</option>
-          <option value="03">Student 03</option><option value="04">Student 04</option>
-          <option value="05">Student 05</option><option value="06">Student 06</option>
-          <option value="07">Student 07</option><option value="08">Student 08</option>
-          <option value="09">Student 09</option><option value="10">Student 10</option>
-          <option value="11">Teacher Test (11)</option>
-        </select>
+        <label for="studentSelect">Student number</label>
+        <input id="studentSelect" type="text" inputmode="numeric" pattern="[0-9]{1,6}" maxlength="6" autocomplete="off" placeholder="Enter your student number" aria-label="Student number">
         <label for="passcode">Private 4-digit passcode</label>
         <input id="passcode" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off" placeholder="4 digits" aria-label="Private 4-digit passcode">
         <p id="loginError" class="field-error" role="alert"></p>
