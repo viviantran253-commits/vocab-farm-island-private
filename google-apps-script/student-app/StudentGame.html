@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes, maximum-scale=5">
   <meta name="theme-color" content="#4d8f5b">
   <title>Vocab Farm Island</title>
   <base href="<?= assetBaseUrl ?>">
@@ -15,17 +14,15 @@
       <img class="game-logo" src="assets/ui/login/game_logo.png" alt="Vocab Farm Island">
 
       <h1>Welcome to Vocab Farm Island!</h1>
-      <p>Log in to continue your saved island and vocabulary progress.</p>
       <div class="login-fields">
         <label for="studentSelect">Student number</label>
         <input id="studentSelect" type="text" inputmode="numeric" pattern="[0-9]{1,6}" maxlength="6" autocomplete="off" placeholder="Enter your student number" aria-label="Student number">
-        <label for="passcode">Private 4-digit passcode</label>
-        <input id="passcode" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off" placeholder="4 digits" aria-label="Private 4-digit passcode">
+        <label for="passcode">Passcode</label>
+        <input id="passcode" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off" placeholder="Enter your passcode" aria-label="Passcode">
         <p id="loginError" class="field-error" role="alert"></p>
         <button id="playButton" class="primary-btn full-btn" type="button">🌿 Enter the Island</button>
         <button id="recoverLoginButton" class="secondary-btn full-btn" type="button">🛟 Recover an existing test profile</button>
       </div>
-      <p class="safety-note">Your progress is saved in your teacher's private Google Sheet.</p>
     </div>
   </main>
 

@@ -12,7 +12,7 @@ const server = vm.createContext({
   HtmlService: {
     createTemplateFromFile: name => (template = {
       getRawContent: () => `raw:${name}`,
-      evaluate: () => ({ setTitle: title => ({ title }) }),
+      evaluate: () => ({ setTitle: title => ({ title, addMetaTag: (name, content) => ({ title, name, content }) }) }),
     }),
     createHtmlOutput: value => value,
   },
@@ -23,6 +23,8 @@ test('official deployment uses existing Sheet property and v0.42 asset directory
   assert.equal(server.data_().id, 'private-teacher-sheet');
   assert.equal(server.include('GameCode'), 'raw:GameCode');
   assert.equal(server.doGet().title, 'Vocab Farm Island');
+  assert.equal(server.doGet().name, 'viewport');
+  assert.match(server.doGet().content, /width=device-width/);
   assert.equal(template.assetBaseUrl, 'https://example.github.io/vocab-farm-island-private/staging/v0.42/');
 });
 

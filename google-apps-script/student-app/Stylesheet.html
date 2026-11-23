@@ -725,3 +725,20 @@ body.teacher-test-mode .dev-menu-btn{display:flex!important;}
  .zoom-controls{top:calc(var(--vfi-top-menu-bottom,250px) + 10px)!important;bottom:auto!important;right:8px!important;max-width:calc(100vw - 16px);gap:3px;padding:3px 4px}
  .area-hint{top:calc(var(--vfi-top-menu-bottom,250px) + 75px)!important}
 }
+
+/* Compact login card; these rules do not change the desktop game interface. */
+.login-card{padding:18px 26px 24px}
+.login-card .game-logo{margin:0 auto 2px}
+.login-card h1{margin:0 0 20px}
+.login-fields{gap:8px}
+.login-fields input#studentSelect,.login-fields input#passcode{letter-spacing:normal}
+.login-fields .field-error:empty{display:none}
+.login-fields #playButton{margin-top:12px}
+@media(max-width:720px){
+ .login-card{width:min(100%,470px);padding:16px 18px 22px}
+ .login-card .game-logo{max-height:130px}
+ .login-card h1{margin:2px 0 17px;font-size:clamp(20px,5.3vw,25px)}
+ .top-buttons{box-sizing:border-box;width:min(352px,calc(100% - 16px));right:max(8px,env(safe-area-inset-right))}
+ .top-buttons .icon-btn{touch-action:manipulation}
+ .zoom-controls{box-sizing:border-box;max-width:calc(100% - 16px);touch-action:manipulation}
+}

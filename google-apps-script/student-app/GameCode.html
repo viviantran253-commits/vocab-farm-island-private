@@ -1,4 +1,4 @@
-/* Vocab Farm Island v0.43: official online classroom game. */
+/* Vocab Farm Island v0.45: official online classroom game. */
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
@@ -156,7 +156,7 @@ const PLOT_UNLOCKS = [
   {level:15, price:700},{level:20, price:800}
 ];
 const STORAGE_PREFIX = 'vocabFarmDeveloperTest_v1_'; // SAME v0.18–v0.27 prefix: no forced reset
-const BUILD_ID='v0.44',BACKUP_EVERY_MS=10*60*1000;
+const BUILD_ID='v0.45',BACKUP_EVERY_MS=10*60*1000;
 const LAST_BUILD_PREFIX='vfi_last_build_v1_';
 let lastBackupAt=0,backupRunning=false,lastSaveErrorAt=0,pendingRecoveryImport=null;
 const BANK_KEY = 'vocabFarmDeveloperCustomBank_v1';
@@ -312,6 +312,7 @@ function canBuySpecial(){return state.level>=SPECIAL_SEED.level&&state.gold>=SPE
 let onlineToken=null,onlineDirty=false,onlineBusy=false,onlineRevision=0,onlineSaveAt=0,onlineErrorAt=0,onlineTestMode=false,onlineTestBusy=false;
 let onlinePendingEvents=[];
 let specialServerBusy=false;
+let specialSyncPhase=false,pendingSpecialPurchase=false;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function serverCall(method,...args){return new Promise((resolve,reject)=>{
   if(!ONLINE)return reject(Error('Not connected to Apps Script'));
@@ -323,7 +324,7 @@ let onlineSaveTimer=null;
 function queueOnlineSave(){if(!ONLINE||!onlineToken)return;onlineDirty=true;setSaveState('pending','● Saving to Google Sheets…');clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},1600);}
 async function flushOnline(){
  if(!ONLINE||!onlineToken||!state)return false;
- if(onlineBusy||onlineTestBusy)return false;
+ if(onlineBusy||onlineTestBusy||(specialServerBusy&&!specialSyncPhase))return false;
  if(!onlineDirty)return true;
  onlineBusy=true;onlineDirty=false;
  const token=onlineToken,events=onlinePendingEvents.slice(0,50);
@@ -346,11 +347,14 @@ async function flushOnline(){
 }
 async function syncBeforeMagicTransaction(){
  if(!ONLINE)return true;
+ specialSyncPhase=true;
+ try{
  // Wait for any auto-save in flight before sending a revision-sensitive request.
  for(let tries=0;onlineBusy&&tries<50;tries++)await delay(100);
  if(onlineBusy){toast('Progress is still syncing. Try again.',true);return false;}
  if(onlineDirty&&!(await flushOnline())){toast('Cannot confirm your progress with Google Sheets. No purchase or reveal was made.',true);return false;}
  return !onlineDirty;
+ }finally{specialSyncPhase=false;}
 }
 const ACTION_ENTER_MS = 240;
 const ACTION_EXIT_MS = 300;
@@ -705,7 +709,7 @@ function showPlantVocabulary(word,nextLabel){
 }
 function showShop(){const content=`<div class="shop-intro">${img('assets/ui/shop/shopkeeper/shopkeeper_portrait_128.png')}<div><div class="shop-gold">${goldIconHTML()} <strong>${state.gold} gold</strong></div></div></div>
  <div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><span class="price">${goldIconHTML()} ${c.seed}</span><span class="subtext">${c.mins} min · Sell ${c.sale}</span>${state.level<c.level?`<span class="tag danger">Level ${c.level}</span>`:`<button class="primary-btn" data-do="buy" data-crop="${c.id}" ${state.gold<c.seed?'disabled':''}>Buy</button>`}<small>Owned: ${state.seeds[c.id]||0}</small></div>`).join('')}</div>
- <h3 class="section-heading">Magical companions & fences</h3><div class="card-grid"><div class="item-card">${img(specialSeedShopArt)}<strong>Special Seed</strong><span class="price">${goldIconHTML()} ${SPECIAL_SEED.seed}</span><small>Unlock Lv 5 · No daily purchase limit</small><small>Owned: ${state.seeds.special||0}</small><button class="primary-btn" data-do="buy-special" ${canBuySpecial()?'':'disabled'}>${state.level<5?'Unlock at Lv 5':'Buy 1'}</button></div><div class="item-card">${img('assets/fences/fence_horizontal.png')}<strong>Wooden Fence</strong><span class="price">${goldIconHTML()} ${FENCE_PRICE}</span><small>Rotate: horizontal / vertical</small><small>Owned: ${state.fenceStock}</small><button class="primary-btn" data-do="buy-fence" ${state.gold<FENCE_PRICE?'disabled':''}>Buy 1</button></div></div>
+ <h3 class="section-heading">Magical companions & fences</h3><div class="card-grid"><div class="item-card">${img(specialSeedShopArt)}<strong>Special Seed</strong><span class="price">${goldIconHTML()} ${SPECIAL_SEED.seed}</span><small>Unlock Lv 5</small><small>Owned: ${(state.seeds.special||0)+(pendingSpecialPurchase?1:0)}${pendingSpecialPurchase?' (1 confirming)':''}</small><button class="primary-btn" data-do="buy-special" ${canBuySpecial()&&!specialServerBusy?'':'disabled'}>${pendingSpecialPurchase?'Confirming…':state.level<5?'Unlock at Lv 5':'Buy 1'}</button></div><div class="item-card">${img('assets/fences/fence_horizontal.png')}<strong>Wooden Fence</strong><span class="price">${goldIconHTML()} ${FENCE_PRICE}</span><small>Rotate: horizontal / vertical</small><small>Owned: ${state.fenceStock}</small><button class="primary-btn" data-do="buy-fence" ${state.gold<FENCE_PRICE?'disabled':''}>Buy 1</button></div></div>
  <div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decorations & packs</button><button class="secondary-btn" data-do="inventory">Inventory</button>${canRescue()?'<button class="primary-btn" data-do="rescue">Free carrot seed</button>':''}</div>`;
  openModal('Seed Shop',content,'','shop');}
 function showDecorationShop(){
@@ -732,19 +736,28 @@ async function buySpecialSeed(){
  if(!canBuySpecial()){toast('Level 5 and 300 gold are required.',true);return;}
  if(ONLINE){
   specialServerBusy=true;
+  pendingSpecialPurchase=true;showShop();
   try{
    if(!(await syncBeforeMagicTransaction()))return;
+   const goldAtRequest=state.gold,seedsAtRequest=state.seeds.special||0;
    const result=await serverCall('studentSpecialBuy',onlineToken,onlineRevision);
    if(result?.conflict){onlineDirty=true;toast('Progress changed on another device. Log in again before buying.',true);return;}
    if(!result?.ok)throw Error('Purchase was not confirmed.');
    onlineRevision=result.revision;
-   state.gold=result.gold;state.seeds.special=result.specialSeeds;state.specialSeedLastPurchase=result.day;
-   save();updateHUD();showShop();toast('Purchased 1 Special Seed!');
+   state.gold=result.gold+(state.gold-goldAtRequest);
+   state.seeds.special=result.specialSeeds+((state.seeds.special||0)-seedsAtRequest);
+   state.specialSeedLastPurchase=result.day;
+   updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Special Seed saved to Google Sheets');toast('Purchased 1 Special Seed!');
   }catch(err){toast('Special Seed purchase not confirmed: '+(err?.message||err),true);}
-  finally{specialServerBusy=false;}
+  finally{pendingSpecialPurchase=false;specialServerBusy=false;refreshSpecialSeedViews();if(onlineDirty){clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},100);}}
   return;
  }
  state.gold-=SPECIAL_SEED.seed;state.seeds.special++;/* legacy daily-purchase field no longer enforced */save();updateHUD();showShop();toast('Developer test purchase: +1 Special Seed!');
+}
+function refreshSpecialSeedViews(){
+ if(activeModal==='shop')showShop();
+ else if(activeModal==='inventory')showInventory();
+ else if(activeModal==='owned-seeds')showOwnedSeeds();
 }
 function buyFence(){if(state.gold<FENCE_PRICE)return;state.gold-=FENCE_PRICE;state.fenceStock++;save();updateHUD();showShop();}
 function canRescue(){const seeds=Object.values(state.seeds).reduce((a,b)=>a+b,0),harvest=Object.values(state.harvest).reduce((a,b)=>a+b,0),growing=state.plots.some(p=>p.crop);return state.gold<CROPS.carrot.seed&&seeds===0&&harvest===0&&!growing;}
@@ -846,7 +859,7 @@ function sellFence(){
  save();updateHUD();showOwnedDecorations();toast(`Wooden Fence sold for ${reward} gold.`);
 }
 function showInventory(){const section=(kind,label,list)=>`<h3 class="section-heading">${label}</h3><div class="inventory-grid">${list.map(c=>`<div class="inventory-cell">${img(cropIcon(c.id,kind==='seed'?'seed':'harvested'))}<span>${escapeHTML(c.name)}</span><small>× ${kind==='seed'?(state.seeds[c.id]||0):(state.harvest[c.id]||0)}</small></div>`).join('')}</div>`;
- openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${state.seeds.special||0}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,'INVENTORY • SAVED IN THIS BROWSER','inventory');}
+ openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${(state.seeds.special||0)+(pendingSpecialPurchase?1:0)}${pendingSpecialPurchase?' · 1 confirming':''}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,'INVENTORY • SAVED IN THIS BROWSER','inventory');}
 // v0.24: Bottom shortcuts show purchased items, never the shops.
 // Keep these menus separate from the full Bag, which includes harvested crops.
 function showOwnedDecorations(){
@@ -863,12 +876,12 @@ function showOwnedDecorations(){
 }
 function showOwnedSeeds(){
  const items=CROP_DATA.filter(c=>(state.seeds[c.id]||0)>0);
- const hasSpecial=(state.seeds.special||0)>0;
+ const hasSpecial=(state.seeds.special||0)>0||pendingSpecialPurchase;
  const available=state.plots.filter(p=>p.unlocked&&!p.crop).length;
  const cards=items.map(c=>`<article class="owned-asset-card">${img(cropIcon(c.id,'seed'),'owned-asset-image',c.name)}<strong>${escapeHTML(c.name)}</strong><span class="owned-count">Owned ×${state.seeds[c.id]}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="${c.id}" ${available?'':'disabled'}>Choose plot</button></article>`).join('');
- const special=hasSpecial?`<article class="owned-asset-card">${img(specialSeedArt,'owned-asset-image','Special Seed')}<strong>Special Seed</strong><span class="owned-count">Owned ×${state.seeds.special}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="special" ${available?'':'disabled'}>Choose plot</button></article>`:'';
+ const special=hasSpecial?`<article class="owned-asset-card">${img(specialSeedArt,'owned-asset-image','Special Seed')}<strong>Special Seed</strong><span class="owned-count">Owned ×${(state.seeds.special||0)+(pendingSpecialPurchase?1:0)}${pendingSpecialPurchase?' · 1 confirming':''}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="special" ${available&&(state.seeds.special||0)>0?'':'disabled'}>Choose plot</button></article>`:'';
 
- const content=`<div class="stat-strip"><span class="stat-chip">🌱 ${items.reduce((n,c)=>n+(state.seeds[c.id]||0),0)+(state.seeds.special||0)} seeds owned</span><span class="stat-chip">🟫 ${available} empty plots</span></div>
+ const content=`<div class="stat-strip"><span class="stat-chip">🌱 ${items.reduce((n,c)=>n+(state.seeds[c.id]||0),0)+(state.seeds.special||0)+(pendingSpecialPurchase?1:0)} seeds shown${pendingSpecialPurchase?' (1 confirming)':''}</span><span class="stat-chip">🟫 ${available} empty plots</span></div>
   <div class="owned-asset-grid">${cards}${special}</div>${!items.length&&!hasSpecial?'<div class="owned-empty">No seeds in your inventory yet.</div>':''}`;
  openModal('My Seeds',content,'OWNED SEEDS · NOT THE SHOP','owned-seeds');
 }
@@ -914,15 +927,15 @@ function showSpecialPlot(i){
  const timer=due?'Ready now':formatSeconds(c.nextDueAt-now());
  openModal(`Special Seed · Plot ${i+1}`,`<div class="plot-banner">${img(specialGrowthArt(c))}<div><h3>${escapeHTML(character)}</h3><p>${escapeHTML(tag)} · Stage ${c.stage+1}/5</p></div></div><div class="timer-block">${escapeHTML(title)} · ${escapeHTML(vi)}<br><strong class="live-countdown" data-until="${c.nextDueAt}">${escapeHTML(timer)}</strong></div><div class="button-row">${due?`<button class="primary-btn" data-do="${pending?'finish-special-reveal':done?'harvest-special':'start-question'}" data-index="${i}" ${c.retryAfter>now()?'disabled':''}>${escapeHTML(title)}</button>`:''}<button class="secondary-btn" data-do="inventory">Inventory</button></div>`,'SPECIAL SEED • MAGIC COMPANION','plot');
 }
-async function finishSpecialReveal(index,questionContext=null){
+async function finishSpecialReveal(index,questionContext=null,actionDone=null){
  if(!ONLINE||specialServerBusy)return;
  const crop=state.plots[index]?.crop;
  if(!crop||crop.type!=='special'||crop.stage!==0||crop.pendingReveal!==true)return;
  specialServerBusy=true;
  try{
-  if(!(await syncBeforeMagicTransaction())){showSpecialPlot(index);return;}
+  if(!(await syncBeforeMagicTransaction())){if(actionDone)await actionDone;showSpecialPlot(index);return;}
   const result=await serverCall('studentSpecialReveal',onlineToken,index,onlineRevision);
-  if(result?.conflict){onlineDirty=true;toast('Progress changed on another device. Please log in again.',true);showSpecialPlot(index);return;}
+  if(result?.conflict){onlineDirty=true;if(actionDone)await actionDone;toast('Progress changed on another device. Please log in again.',true);showSpecialPlot(index);return;}
   if(!result?.ok||!result.crop||!result.crop.characterId)throw Error('No confirmed reveal received.');
   onlineRevision=result.revision;
   Object.assign(crop,result.crop);delete crop.pendingReveal;
@@ -930,8 +943,9 @@ async function finishSpecialReveal(index,questionContext=null){
   save();updateHUD();
   const word=questionContext?.word;
   const message=`${petById(crop).name} (${companionStars(crop.rarity)}) revealed!`;
-  beginTimedAction('water',()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${word?wordCard(word,'neutral'):''}<div class="timer-block">${escapeHTML(message)}</div>`,'','feedback'),index);
- }catch(err){toast('Reveal was not confirmed. Use Finish character reveal to retry. '+(err?.message||''),true);showSpecialPlot(index);}
+  const feedback=()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${word?wordCard(word,'neutral'):''}<div class="timer-block">${escapeHTML(message)}</div>`,'','feedback');
+  if(actionDone){await actionDone;feedback();}else beginTimedAction('water',feedback,index);
+ }catch(err){if(actionDone)await actionDone;toast('Reveal was not confirmed. Use Finish character reveal to retry. '+(err?.message||''),true);showSpecialPlot(index);}
  finally{specialServerBusy=false;}
 }
 function harvestSpecial(i){const plot=state.plots[i],c=plot?.crop;if(!c||c.type!=='special'||c.stage!==4||!isDue(c)||actionMotion)return;
@@ -1202,7 +1216,11 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
    // A successful Water question is saved as a resumable pending reveal.
    // The server alone chooses the character and rarity for online students.
    crop.pendingReveal=true;save();
-   await finishSpecialReveal(q.plotIndex,q);
+   const actionDone=new Promise(resolve=>beginTimedAction('water',()=>{
+    resolve();
+    if(specialServerBusy)openModal('Watering',`<div class="timer-block">Confirming your answer and companion…</div>`,'','feedback');
+   },q.plotIndex));
+   await finishSpecialReveal(q.plotIndex,q,actionDone);
    return;
   }
   if(phase===0){const r=rollCompanion();crop.characterId=r.characterId;crop.rarity=r.rarity;}
@@ -1919,7 +1937,7 @@ function bindEvents(){resize();window.addEventListener('resize',resize);$('stude
  const el=document.activeElement,editing=el&&(['INPUT','TEXTAREA','SELECT'].includes(el.tagName)||el.isContentEditable);if(editing||!playing||!$('modalOverlay').classList.contains('hidden'))return;
  const code=e.code;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD'].includes(code)){e.preventDefault();keys.add(code)}if(code==='KeyE'||code==='Space'){e.preventDefault();interact();}if(code==='KeyI'){e.preventDefault();showInventory();}});
  window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>{keys.clear();touchDirs.clear();if(playing){save();flushOnline()}});document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){save();flushOnline()}});window.addEventListener('beforeunload',()=>{if(playing){save();flushOnline()}});}
-if(ONLINE){document.querySelector('.demo-code')?.remove();$('passcode').placeholder='Your private 4-digit code';document.querySelector('.safety-note').textContent='Your progress is saved in your teacher’s private Google Sheet.';for(const id of ['devToolsButton','recoverLoginButton','updateNotice']){$(id)?.classList.add('hidden');}}
+if(ONLINE){document.querySelector('.demo-code')?.remove();for(const id of ['devToolsButton','recoverLoginButton','updateNotice']){$(id)?.classList.add('hidden');}}
 bindEvents();
 // No developer debug hook is exposed by the online classroom game.
 })();

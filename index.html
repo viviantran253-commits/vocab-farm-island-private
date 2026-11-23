@@ -25,12 +25,7 @@
     <p>Open the online game to use your teacher's vocabulary and save progress across devices.</p>
     <a id="playLink" href="https://script.google.com/macros/s/AKfycbzR8cL6fbcl12eF1W53k1C_4jvy0Yj1PUgL670kOVYO0SlvP06S1e0_HCZYIcqlsuqh_A/exec">Play Vocab Farm Island</a>
     <small>Students need their own four-digit passcode from the teacher.</small>
+    <small>If Google says it cannot open the game, try the button in a private Safari or Chrome tab with only one Google account signed in.</small>
   </main>
-  <script>
-    const gameUrl = document.getElementById('playLink').href;
-    if (gameUrl.startsWith('https://script.google.com/macros/s/') && gameUrl.endsWith('/exec')) {
-      window.location.replace(gameUrl);
-    }
-  </script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.44: official student web app.
+/** Vocab Farm Island v0.45: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -22,12 +22,15 @@ function doGet() {
   if (!/^https:\/\//.test(base)) return HtmlService.createHtmlOutput('<h2>Teacher setup needed</h2><p>Set ASSET_BASE_URL in Script Properties to the GitHub Pages URL for your game assets.</p>');
   // Keep the existing Script Property and deployment URL so older versions can roll back unchanged.
   tpl.assetBaseUrl = base.replace(/\/*$/, '/') + 'staging/v0.42/';
-  return tpl.evaluate().setTitle('Vocab Farm Island');
+  return tpl.evaluate().setTitle('Vocab Farm Island')
+    .addMetaTag('viewport','width=device-width, initial-scale=1, viewport-fit=cover');
 }
+let openSheetCache_ = null;
 function data_() {
   const id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
   if (!id) throw new Error('Teacher has not configured SHEET_ID.');
-  return SpreadsheetApp.openById(id);
+  if(!openSheetCache_ || openSheetCache_.id!==id)openSheetCache_={id,sheet:SpreadsheetApp.openById(id)};
+  return openSheetCache_.sheet;
 }
 function tab_(ss, name) {
   const t = ss.getSheetByName(name);
