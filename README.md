@@ -1,4 +1,4 @@
-# Vocab Farm Island — classroom game v0.42
+# Vocab Farm Island — classroom game v0.43
 
 ## Play
 
@@ -14,6 +14,8 @@ Open the restricted teacher Google Sheet and choose **Vocab Farm → Open Teache
 To start a student over, select their ID in the teacher dashboard, type that same two-digit ID under **Start this student over**, and click **Reset game progress**. This resets only that student's game, Special Seed ledger, and answer history to Level 1. Their name, passcode and vocabulary remain. The previous rows are copied to the private `_ResetArchive` tab; the student must sign in again.
 
 Adding new shop items later does not itself clear saved progress. Keep the existing save fields and item IDs compatible when updating the game, and migrate older profiles if a future item needs new save data.
+
+For private feature testing, unlock the teacher dashboard and choose **Create teacher test profile (11)**. Record the generated four-digit passcode. Profile 11 has its own `Vocab_11` sample words and saved progress. Sign in to the usual student link as **Teacher Test (11)** to use its test controls for gold, level, resources, plot unlocks, and growth timers. The controls affect only profile 11. To start it over, use the dashboard reset for ID 11.
 
 The live student Apps Script project is `Vocab Farm Student Game`. Its private Script Properties hold `SHEET_ID` and `ASSET_BASE_URL`. Its web app runs as the teacher account and allows anyone to open the login page; access to each profile requires its passcode. The GitHub Pages site hosts artwork and routes visitors to that web app. No Sheet ID or PIN is stored in public source.
 

@@ -12,7 +12,7 @@
    <button class="btn" onclick="loginTeacher()">Unlock dashboard</button></div>
  <p id="authError" class="error" role="alert"></p>
 </section>
-<div id="adminContent" hidden><div class="head"><div><h1>🌱 Teacher Dashboard</h1><p class="muted">Private Google Sheet · 10 students</p></div><button class="btn secondary" onclick="refresh()">↻ Refresh</button></div>
+<div id="adminContent" hidden><div class="head"><div><h1>🌱 Teacher Dashboard</h1><p class="muted">Private Google Sheet · 10 students + optional teacher test profile</p></div><button class="btn secondary" onclick="refresh()">↻ Refresh</button></div>
 <p id="status" role="status" class="muted">Loading…</p>
 <section id="setup" class="panel" hidden><h3>Initialize class</h3><p>Create 10 student accounts, 10 vocabulary tabs, progress, and history records. Existing data will not be erased.</p><button class="btn" onclick="setup()">Set up Sheets</button></section><div id="initialPins"></div>
 <div id="studentGrid" class="grid"></div>
@@ -21,6 +21,9 @@
 <div class="panel"><div class="head"><h3>Answer history</h3><button class="btn secondary" onclick="loadHistory()">Refresh history</button></div><label><input id="wrongOnly" type="checkbox" onchange="drawHistory()"> Show mistakes only</label><p id="historyInfo" class="muted"></p><div class="overflow"><table class="logs"><thead><tr><th>When</th><th>Word / task</th><th>Answer → correct</th><th>Result</th></tr></thead><tbody id="historyBody"></tbody></table></div></div></section>
 <section class="panel" id="teacherSettingsPanel"><h3>⚙️ Teacher settings · Cài đặt giáo viên</h3>
  <p class="muted">Only available in this private Google Sheet. Students cannot open or change these settings from their game.</p>
+ <div class="group"><button class="btn" onclick="createTestProfile()">🧪 Create teacher test profile (11)</button></div>
+ <p class="muted">Profile 11 has its own progress and Vocab_11 sample words. Only its authenticated game session can use the online test controls. Keep its four-digit passcode private.</p>
+ <div id="testProfileResult" role="status"></div>
  <div class="group"><button class="btn secondary" onclick="downloadTemplate()">⬇ Download vocabulary CSV template</button></div>
  <p class="muted">Enter daily words in Vocab_01–Vocab_10. To rename a student or reset their 4-digit code, select their account above. Only share the <strong>student web-app /exec link</strong>, never this Sheet.</p>
  <div class="group"><label>Change private teacher PIN (optional)</label></div>
@@ -47,6 +50,12 @@ async function loadHistory(){if(!selected)return;byId('historyInfo').textContent
 function drawHistory(){const wrong=byId('wrongOnly').checked,data=wrong?logs.filter(x=>x.result!=='Correct'):logs;byId('historyInfo').textContent=`Showing ${data.length} of ${logs.length} recent entries`;byId('historyBody').innerHTML=data.length?data.map(x=>`<tr><td>${esc(new Date(x.time).toLocaleDateString())}</td><td><b>${esc(x.word)}</b><br>${esc(x.source)} · ${esc(x.stage)}${x.attempt>1?' · Try '+x.attempt:''}</td><td>${esc(x.answer)}<br><small>→ ${esc(x.expected)}</small></td><td class="${x.result==='Correct'?'good':'bad'}">${x.result==='Correct'?'✓':'×'}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No answers yet</td></tr>';}
 async function rename(){const name=byId('displayName').value.trim();try{await call('changeStudentName',selected,name);status('Student name updated.','success');await refresh();}catch(e){status(e.message,'error');}}
 async function resetPin(){const pin=byId('newPin').value.trim();if(pin&&!/^\d{4}$/.test(pin)){status('PIN must have four digits.','error');return;}if(!confirm('Reset this student’s passcode?'))return;try{const r=await call('resetStudentPIN',selected,pin);byId('newPinResult').innerHTML=`<p class="pin">New passcode for ${esc(r.id)}: <strong>${esc(r.pin)}</strong><br>Share it privately with the student.</p>`;byId('newPin').value='';status('Passcode updated; old sessions revoked.','success');}catch(e){status(e.message,'error');}}
+async function createTestProfile(){
+ try{const r=await call('createTeacherTestProfile');
+  byId('testProfileResult').innerHTML=r.created?`<p class="pin">Teacher test profile ID: 11<br>Private passcode: <strong>${esc(r.pin)}</strong><br>Record it now. It will not be shown again.</p>`:`<p class="muted">${esc(r.message)}</p>`;
+  await refresh();selected='11';await selectStudent('11');status(r.created?'Teacher test profile created. Keep its passcode private.':r.message,'success');
+ }catch(e){status(e.message,'error');}
+}
 async function resetProgress(){
  const id=selected,typed=byId('resetProgressId').value.trim();
  if(!id||typed!==id){status('Type the selected student ID exactly before resetting.','error');return;}

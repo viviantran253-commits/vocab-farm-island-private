@@ -1,4 +1,4 @@
-/* Vocab Farm Island v0.42: official online classroom game. */
+/* Vocab Farm Island v0.43: official online classroom game. */
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
@@ -156,7 +156,7 @@ const PLOT_UNLOCKS = [
   {level:15, price:700},{level:20, price:800}
 ];
 const STORAGE_PREFIX = 'vocabFarmDeveloperTest_v1_'; // SAME v0.18–v0.27 prefix: no forced reset
-const BUILD_ID='v0.42',BACKUP_EVERY_MS=10*60*1000;
+const BUILD_ID='v0.43',BACKUP_EVERY_MS=10*60*1000;
 const LAST_BUILD_PREFIX='vfi_last_build_v1_';
 let lastBackupAt=0,backupRunning=false,lastSaveErrorAt=0,pendingRecoveryImport=null;
 const BANK_KEY = 'vocabFarmDeveloperCustomBank_v1';
@@ -309,7 +309,7 @@ function drawEffects(){const elapsedNow=now();magicEffects=magicEffects.filter(e
 function companionStars(n){return '★'.repeat(clamp(Number(n)||1,1,3))}
 function canBuySpecial(){return state.level>=SPECIAL_SEED.level&&state.gold>=SPECIAL_SEED.seed}
 
-let onlineToken=null,onlineDirty=false,onlineBusy=false,onlineRevision=0,onlineSaveAt=0,onlineErrorAt=0;
+let onlineToken=null,onlineDirty=false,onlineBusy=false,onlineRevision=0,onlineSaveAt=0,onlineErrorAt=0,onlineTestMode=false,onlineTestBusy=false;
 let onlinePendingEvents=[];
 let specialServerBusy=false;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -323,7 +323,7 @@ let onlineSaveTimer=null;
 function queueOnlineSave(){if(!ONLINE||!onlineToken)return;onlineDirty=true;setSaveState('pending','● Saving to Google Sheets…');clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},1600);}
 async function flushOnline(){
  if(!ONLINE||!onlineToken||!state)return false;
- if(onlineBusy)return false;
+ if(onlineBusy||onlineTestBusy)return false;
  if(!onlineDirty)return true;
  onlineBusy=true;onlineDirty=false;
  const token=onlineToken,events=onlinePendingEvents.slice(0,50);
@@ -752,6 +752,17 @@ function buySeed(id){const c=CROPS[id];if(!c||state.level<c.level||state.gold<c.
 function getRescue(){if(!canRescue()){toast('Emergency seed is only available when you cannot continue farming.');return;}state.seeds.carrot=1;save();toast('One free carrot seed is ready!');showShop()}
 function showDevTools(){
  if(!state)return;
+ if(ONLINE){
+  if(!onlineTestMode)return;
+  const seconds=Number(state.settings?.testGrowthSeconds)||0;
+  openModal('Teacher Test Controls',`<div class="dev-test-hint"><strong>PRIVATE TEST PROFILE 11</strong><p>These controls change only this test profile in the teacher Sheet. Student accounts are unaffected.</p></div>
+   <div class="stat-strip"><span class="stat-chip">Lv ${state.level}</span><span class="stat-chip">${goldIconHTML()} ${state.gold.toLocaleString('en-US')} gold</span><span class="stat-chip">✨ ${state.seeds.special||0} Special Seeds</span></div>
+   <div class="dev-tool-grid"><button class="primary-btn" data-do="test-gold">${goldIconHTML()} Add 100,000 gold</button><button class="primary-btn" data-do="test-seeds">✨ Add 10 Special Seeds</button><button class="secondary-btn" data-do="test-fences">🪵 Add 20 fences</button><button class="secondary-btn" data-do="test-plots">🌱 Unlock all plots</button><button class="secondary-btn" data-do="test-ready">⚡ Make growing plots ready</button></div>
+   <div class="group"><label for="testLevel">Level (1–50)</label><input id="testLevel" class="field" type="number" min="1" max="50" step="1" value="${state.level}"><button class="primary-btn" data-do="test-level">Set level</button></div>
+   <div class="group"><label for="testGrowthSeconds">Seconds between care stages (0 = normal)</label><input id="testGrowthSeconds" class="field" type="number" min="0" max="120" step="1" value="${seconds}"><button class="primary-btn" data-do="test-growth">Set timer</button></div>
+   <p class="fine-print">A 1-second timer applies to new care stages. Use “Make growing plots ready” for crops already waiting. Questions and purchases still work normally.</p>`, 'PROFILE 11 · TEST ONLY','developer');
+  return;
+ }
  const planted=state.plots.filter(p=>p.crop).length;
  const content=`<div class="dev-test-hint"><strong>OFFLINE DEV EDITION</strong><p>Only this browser's developer-test saves are changed. No Google Sheets sync, no real student accounts.</p></div>
   <div class="stat-strip"><span class="stat-chip">Lv ${state.level}</span><span class="stat-chip">${goldIconHTML()} ${state.gold.toLocaleString('en-US')} gold</span><span class="stat-chip">✨ ${state.seeds.special||0} Special Seeds</span><span class="stat-chip">🌱 ${planted} growing plots</span></div>
@@ -787,6 +798,21 @@ function devAction(action){if(ONLINE)return;
    state=newProfile(state.id);ensureCompanionState();player.x=880;player.y=495;clearPendingPetTap();petSpeech=null;magicEffects=[];setPlacementMode(null);break;
  }
  save();updateHUD();showDevTools();toast('Developer test setting applied.');
+}
+async function teacherTestAction(action,value){
+ if(!ONLINE||!onlineTestMode||!onlineToken||onlineTestBusy)return;
+ if(specialServerBusy){toast('Another game action is finishing. Try again.',true);return;}
+ if(!(await syncBeforeMagicTransaction()))return;
+ onlineTestBusy=true;specialServerBusy=true;
+ try{
+  const response=await serverCall('studentTestAction',onlineToken,action,value,onlineRevision);
+  if(response?.conflict){setSaveState('error','⚠ Save conflict — log in again');toast('This profile changed elsewhere. Log in again before using test controls.',true);return;}
+  if(!response?.ok)throw Error('The test change was not confirmed.');
+  onlineRevision=response.revision;
+  state=VFIRecovery.migrateProfile(response.profile,newProfile(state.id),state.id);
+  ensureCompanionState();updateHUD();setSaveState('saved','✓ Saved to Google Sheets');showDevTools();toast('Test profile updated.');
+ }catch(err){toast('Test change failed: '+(err?.message||err),true);}
+ finally{onlineTestBusy=false;specialServerBusy=false;if(onlineDirty){clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},100);}}
 }
 function decorResale(id){
  const item=DECOR_BY_ID[id];return item?Math.floor(item.price*DECOR_SELL_RATE):0;
@@ -930,7 +956,10 @@ function unlockPlot(i){if(i!==nextLockedPlot())return;
  state.plots[i].unlocked=true;
  save();updateHUD();toast(`Plot ${i+1} unlocked for ${rule.price} gold!`);showPlot(i);
 }
-function cropInterval(c){return Math.round(c.mins*60000/4); }
+function cropInterval(c){
+ const seconds=ONLINE&&onlineTestMode?Number(state?.settings?.testGrowthSeconds)||0:0;
+ return seconds>=1&&seconds<=120?seconds*1000:Math.round(c.mins*60000/4);
+}
 function plantCrop(i,id){const plot=state.plots[i],c=CROPS[id];if(!plot?.unlocked||plot.crop||!(state.seeds[id]>0)||actionMotion)return;
  if(ONLINE&&!bank.length){toast('Teacher has not added any vocabulary for this student yet.',true);return;}
  const wId=chooseWord();const w=wordById(wId);
@@ -981,7 +1010,7 @@ function showCompanionDetail(characterId){
   <div class="button-row"><button class="secondary-btn" data-do="companions">← Back to Collection</button></div>
  `,'COMPANION DETAILS · WORD PRACTICE','companion-detail');
 }
-function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}<button class="secondary-btn" data-do="companions">✨ Companions</button><button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div><p class="fine-print">${ONLINE?'Class progress is saved in the teacher’s private Google Sheet.':'Offline demo: progress stays in this browser.'}</p>`,'YOUR FARM • PERSONAL PROGRESS','house');}
+function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}<button class="secondary-btn" data-do="companions">✨ Companions</button>${ONLINE&&onlineTestMode?'<button class="secondary-btn" data-do="dev-tools">🧪 Test controls</button>':''}<button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div><p class="fine-print">${ONLINE?'Class progress is saved in the teacher’s private Google Sheet.':'Offline demo: progress stays in this browser.'}</p>`,'YOUR FARM • PERSONAL PROGRESS','house');}
 
 // -------------------- Vocabulary questions --------------------
 function editDistance(a,b){a=slug(a);b=slug(b);const dp=Array(b.length+1).fill(0).map((_,i)=>i);for(let i=1;i<=a.length;i++){let prev=dp[0];dp[0]=i;for(let j=1;j<=b.length;j++){let temp=dp[j];dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=temp;}}return dp[b.length]}
@@ -1707,10 +1736,17 @@ async function deliberatelyStartFresh(){
 
 // -------------------- Events, persistence, and frame loop --------------------
 function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(speaker){speakVocabularyWord(speaker.dataset.pronounce);return;}const option=e.target.closest('[data-choice]');if(option){chooseAnswer(Number(option.dataset.choice));return;}const btn=e.target.closest('[data-do]');if(!btn||btn.disabled)return;const action=btn.dataset.do,id=btn.dataset.crop,index=Number(btn.dataset.index);
- if(ONLINE&&(action==='dev-tools'||action.startsWith('dev-')||action.startsWith('recovery')||action==='export-save'||action==='export-template')){toast('This tool is unavailable in the classroom.',true);return;}
+ if(ONLINE&&((action==='dev-tools'&&!onlineTestMode)||action.startsWith('dev-')||(action.startsWith('test-')&&!onlineTestMode)||action.startsWith('recovery')||action==='export-save'||action==='export-template')){toast('This tool is unavailable for this profile.',true);return;}
  switch(action){
  case 'close':closeModal();break;
  case 'dev-tools':showDevTools();break;
+ case 'test-gold':teacherTestAction('add-gold');break;
+ case 'test-seeds':teacherTestAction('special-seeds');break;
+ case 'test-fences':teacherTestAction('fences');break;
+ case 'test-plots':teacherTestAction('plots');break;
+ case 'test-ready':teacherTestAction('ready');break;
+ case 'test-level':teacherTestAction('set-level',Number($('testLevel')?.value));break;
+ case 'test-growth':teacherTestAction('growth-seconds',Number($('testGrowthSeconds')?.value));break;
  case 'dev-level':case 'dev-gold':case 'dev-seeds':case 'dev-fences':case 'dev-plots':case 'dev-ready':case 'dev-fast':case 'dev-limit':case 'dev-reset':devAction(action);break;
  case 'shop':showShop();break;
  case 'decor-shop':showDecorationShop();break;
@@ -1772,7 +1808,7 @@ function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(
  case 'export-template':exportTemplate();break;
  case 'sync-words':reloadOnlineWords();break;
  case 'sync-save':{save();flushOnline();toast('Sending progress to Google Sheets…');break;}
- case 'log-out':{setPlacementMode(null);clearPendingPetTap();petSpeech=null;save();if(ONLINE)flushOnline();closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;break;}
+ case 'log-out':{setPlacementMode(null);clearPendingPetTap();petSpeech=null;save();if(ONLINE)flushOnline();closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');$('devToolsButton').classList.add('hidden');break;}
  }
 }
 function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el.textContent=countdownLong(Number(el.dataset.until)-now());});document.querySelectorAll('.live-countdown,.retry-live').forEach(el=>{let left=Number(el.dataset.until)-now();el.textContent=formatSeconds(left);});
@@ -1805,6 +1841,7 @@ async function beginGame(){let slot;const loginId=$('studentSelect').value.trim(
  try{
   if(ONLINE){const resp=await serverCall('studentLogin',slot,pin);
    onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];bank=resp.words||[];
+   onlineTestMode=resp.testMode===true&&slot==='11';document.body.classList.toggle('teacher-test-mode',onlineTestMode);$('devToolsButton').classList.toggle('hidden',!onlineTestMode);
    if(!resp.profile)throw Error('The online profile is unavailable. No replacement account will be created.');state=VFIRecovery.migrateProfile(resp.profile,newProfile(slot),slot);delete state.landTax;
    if(!state.plots||state.plots.length!==10)throw Error('Invalid online progress.');
   }else{

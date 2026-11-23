@@ -608,6 +608,11 @@
 
 /* Online classroom mode: never display local Developer Test controls. */
 .dev-menu-btn,.dev-login-banner,.developer-watermark,#recoverLoginButton,#updateNotice{display:none !important;}
+body.teacher-test-mode .dev-menu-btn{display:flex!important;}
+.modal[data-mode="developer"] .group{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,130px) auto;gap:8px;align-items:center;margin:12px 0;}
+.modal[data-mode="developer"] .group label{font-weight:800;line-height:1.3;}
+.modal[data-mode="developer"] .group input{min-height:44px;font-size:16px;}
+@media(max-width:720px){.modal[data-mode="developer"] .group{grid-template-columns:1fr;}}
 .hud-save-state[data-state="pending"]{color:#9c622a;}
 .hud-save-state[data-state="error"]{color:#b14435;}
 

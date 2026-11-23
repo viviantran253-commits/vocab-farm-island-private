@@ -3,6 +3,7 @@
  * Only people with editor access to the private Sheet can use its custom menu.
  */
 const STUDENTS='_Students',PROGRESS='_Progress',HISTORY='_History',HEADERS=['English word','UK IPA','Part of speech','Meaning','Example meaning'];
+const TEACHER_TEST_ID='11';
 // Authentication is inside the PRIVATE, Google-account-restricted spreadsheet.
 // The teacher sets a six-digit PIN in the dashboard; never put a PIN in GitHub source.
 const TEACHER_PIN_KEY='VFI_TEACHER_PIN_HASH';
@@ -65,7 +66,32 @@ function setupVocabFarm(teacherToken){requireTeacher_(teacherToken);
  accounts.hideColumns(3,2);
  return {created,ready:true,studentCount:10,detail:'Passcodes are shown only once. Record them privately; reset if lost.'};
 }
-function ensureId_(id){id=String(id||'').padStart(2,'0');if(!/^0[1-9]$|^10$/.test(id))throw Error('Invalid student ID.');return id;}
+/** Create a separate test account without changing any of the ten student accounts. */
+function createTeacherTestProfile(teacherToken){
+ requireTeacher_(teacherToken);
+ const lock=LockService.getScriptLock();lock.waitLock(20000);
+ try{
+  const ss=SpreadsheetApp.getActiveSpreadsheet(),accounts=ss.getSheetByName(STUDENTS);
+  if(!accounts||!ss.getSheetByName(PROGRESS)||!ss.getSheetByName(HISTORY))throw Error('Run Set up Sheets first.');
+  const existing=accounts.getDataRange().getValues().slice(1).some(r=>String(r[0]).padStart(2,'0')===TEACHER_TEST_ID);
+  if(existing)return {created:false,id:TEACHER_TEST_ID,message:'Teacher test profile already exists. Select it in the dashboard to reset its passcode if needed.'};
+  const vocab=createSheet_(ss,'Vocab_'+TEACHER_TEST_ID,HEADERS);
+  vocab.setColumnWidths(1,5,170);
+  if(vocab.getLastRow()===1)vocab.getRange(2,1,6,5).setValues([
+   ['apple','/ˈæp.əl/','n','quả táo','I ate an apple. (Tôi đã ăn một quả táo.)'],
+   ['run','/rʌn/','v','chạy','I run every day. (Tôi chạy mỗi ngày.)'],
+   ['bright','/braɪt/','adj','sáng','The sun is bright. (Mặt trời sáng.)'],
+   ['quickly','/ˈkwɪk.li/','adv','nhanh chóng','She walks quickly. (Cô ấy đi nhanh.)'],
+   ['garden','/ˈɡɑː.dən/','n','khu vườn','The garden is green. (Khu vườn xanh.)'],
+   ['plant','/plɑːnt/','v','trồng','We plant seeds. (Chúng tôi trồng hạt giống.)']
+  ]);
+  const pin=String(Math.floor(Math.random()*9000)+1000),salt=Utilities.getUuid();
+  accounts.appendRow([TEACHER_TEST_ID,'Teacher Test',salt,sha_(salt,pin),0,0,1,new Date()]);
+  accounts.hideColumns(3,2);
+  return {created:true,id:TEACHER_TEST_ID,pin,message:'Record this private passcode now. It will not be shown again.'};
+ }finally{lock.releaseLock();}
+}
+function ensureId_(id){id=String(id||'').padStart(2,'0');if(!/^0[1-9]$|^1[01]$/.test(id))throw Error('Invalid student ID.');return id;}
 function accountRow_(ss,id){const s=ss.getSheetByName(STUDENTS);if(!s)throw Error('Run setup first.');const all=s.getDataRange().getValues();for(let i=1;i<all.length;i++)if(String(all[i][0]).padStart(2,'0')===id)return {sheet:s,row:i+1,values:all[i]};throw Error('Student not found.');}
 function studentSummary(teacherToken){requireTeacher_(teacherToken);
  const ss=SpreadsheetApp.getActiveSpreadsheet();if(!ss.getSheetByName(STUDENTS))return {needsSetup:true,students:[]};

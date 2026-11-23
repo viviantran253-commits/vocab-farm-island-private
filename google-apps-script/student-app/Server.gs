@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.42: official student web app.
+/** Vocab Farm Island v0.43: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -10,6 +10,7 @@ const PROGRESS_TAB = '_Progress';
 const HISTORY_TAB = '_History';
 const MAGIC_LEDGER_TAB = '_MagicLedger';
 const MAGIC_COST = 300;
+const TEACHER_TEST_ID = '11';
 const MAGIC_CHARACTERS = ['itadori_yuji','monkey_d_luffy','sakura_kinomoto','doraemon','pikachu','shin_chan','rudo','sakura_haruka','hoshina_soshiro','kamado_tanjiro','saitama','asuna_yuuki','himmel','frieren','krixi','veera','rouie','dolia','bijan','conan_edogawa','himekawa_yoshino','killua_zoldyck'];
 const VOCAB_PREFIX = 'Vocab_';
 const SESSION_TTL = 21600;  // 6 hours, CacheService maximum
@@ -129,7 +130,7 @@ function studentLogin(studentId,pin){
  const prof=readProgress_(ss,id,String(v[1]));
  const session=Utilities.getUuid()+Utilities.getUuid();
  CacheService.getScriptCache().put(sessionKey_(session),id+'|'+String(v[6]),SESSION_TTL);
- return {session,revision:prof.revision,profile:prof.profile,words:readWords_(ss,id)};
+ return {session,revision:prof.revision,profile:prof.profile,words:readWords_(ss,id),testMode:id===TEACHER_TEST_ID};
 }
 
 function studentWords(session){
@@ -157,6 +158,7 @@ function studentSave(session,profileJson,events,expectedRevision){
   requireSession_(session);
   const p=readProgress_(ss,id,user.name);
   if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
+  if(id!==TEACHER_TEST_ID&&Number(proposed.settings?.testGrowthSeconds||0)!==0)throw Error('Test growth settings are unavailable for student profiles.');
   // These fields may only be changed by the two authenticated server methods.
   if(String(proposed.specialSeedLastPurchase||'')!==String(p.profile.specialSeedLastPurchase||''))throw Error('Special Seed purchase must be confirmed by the server.');
   if(Number(proposed.seeds.special||0)>Number(p.profile.seeds?.special||0))throw Error('Unconfirmed Special Seed inventory increase.');
@@ -227,6 +229,37 @@ function writeMagicProgress_(ss,p,id,profile){
  if(p.row)sh.getRange(p.row,1,1,5).setValues([row]);else sh.appendRow(row);
  return p.revision+1;
 }
+/** Restricted test controls affect only the authenticated teacher test profile. */
+function studentTestAction(session,action,value,expectedRevision){
+ const user=requireSession_(session);
+ if(user.id!==TEACHER_TEST_ID)throw Error('Teacher test controls are unavailable for this profile.');
+ const ss=data_(),lock=LockService.getScriptLock();lock.waitLock(20000);
+ try{
+  requireSession_(session);
+  const p=readProgress_(ss,user.id,user.name);
+  if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
+  const profile=p.profile;
+  switch(String(action)){
+   case 'add-gold':profile.gold=Math.min(1000000000,Number(profile.gold)+100000);break;
+   case 'set-level':{
+    const level=Number(value);if(!Number.isInteger(level)||level<1||level>50)throw Error('Choose a level from 1 to 50.');
+    profile.level=level;profile.xp=0;break;
+   }
+   case 'special-seeds':profile.seeds.special=(Number(profile.seeds.special)||0)+10;break;
+   case 'fences':profile.fenceStock=(Number(profile.fenceStock)||0)+20;break;
+   case 'plots':profile.plots.forEach(plot=>{plot.unlocked=true;});break;
+   case 'ready':profile.plots.forEach(plot=>{if(plot.crop){plot.crop.nextDueAt=Date.now()-1000;plot.crop.retryAfter=0;}});break;
+   case 'growth-seconds':{
+    const seconds=Number(value);if(!Number.isInteger(seconds)||seconds<0||seconds>120)throw Error('Choose 0 to 120 seconds.');
+    profile.settings=profile.settings||{};profile.settings.testGrowthSeconds=seconds;break;
+   }
+   default:throw Error('Unknown teacher test action.');
+  }
+  profile.savedAt=Date.now();
+  const revision=writeMagicProgress_(ss,p,user.id,profile);
+  return {ok:true,revision,profile};
+ }finally{lock.releaseLock();}
+}
 function studentSpecialBuy(session,expectedRevision){
  const user=requireSession_(session),ss=data_();
  const lock=LockService.getScriptLock();lock.waitLock(20000);
@@ -262,7 +295,8 @@ function studentSpecialReveal(session,plotIndex,expectedRevision){
   const chance=Math.floor(Math.random()*100);
   crop.rarity=chance<5?3:chance<30?2:1;
   crop.characterId=MAGIC_CHARACTERS[Math.floor(Math.random()*MAGIC_CHARACTERS.length)];
-  crop.stage=1;crop.retryAfter=0;crop.wrong=0;crop.nextDueAt=Date.now()+60*1000;
+  const testSeconds=user.id===TEACHER_TEST_ID?Number(p.profile.settings?.testGrowthSeconds)||0:0;
+  crop.stage=1;crop.retryAfter=0;crop.wrong=0;crop.nextDueAt=Date.now()+(testSeconds>=1&&testSeconds<=120?testSeconds:60)*1000;
   delete crop.pendingReveal;
   p.profile.savedAt=Date.now();
   const rev=writeMagicProgress_(ss,p,user.id,p.profile);
