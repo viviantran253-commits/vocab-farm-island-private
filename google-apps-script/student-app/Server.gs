@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.30: official student web app.
+/** Vocab Farm Island v0.42: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -10,7 +10,7 @@ const PROGRESS_TAB = '_Progress';
 const HISTORY_TAB = '_History';
 const MAGIC_LEDGER_TAB = '_MagicLedger';
 const MAGIC_COST = 300;
-const MAGIC_CHARACTERS = ['itadori_yuji','monkey_d_luffy','sakura_kinomoto','doraemon','pikachu','shin_chan','rudo','sakura_haruka','hoshina_soshiro','kamado_tanjiro','saitama','asuna_yuuki'];
+const MAGIC_CHARACTERS = ['itadori_yuji','monkey_d_luffy','sakura_kinomoto','doraemon','pikachu','shin_chan','rudo','sakura_haruka','hoshina_soshiro','kamado_tanjiro','saitama','asuna_yuuki','himmel','frieren','krixi','veera','rouie','dolia','bijan','conan_edogawa','himekawa_yoshino','killua_zoldyck'];
 const VOCAB_PREFIX = 'Vocab_';
 const SESSION_TTL = 21600;  // 6 hours, CacheService maximum
 
@@ -19,8 +19,8 @@ function doGet() {
   const tpl = HtmlService.createTemplateFromFile('StudentGame');
   let base = PropertiesService.getScriptProperties().getProperty('ASSET_BASE_URL') || '';
   if (!/^https:\/\//.test(base)) return HtmlService.createHtmlOutput('<h2>Teacher setup needed</h2><p>Set ASSET_BASE_URL in Script Properties to the GitHub Pages URL for your game assets.</p>');
-  // Keep the existing Script Property and deployment URL so version 5 can roll back unchanged.
-  tpl.assetBaseUrl = base.replace(/\/*$/, '/') + 'staging/v0.30/';
+  // Keep the existing Script Property and deployment URL so older versions can roll back unchanged.
+  tpl.assetBaseUrl = base.replace(/\/*$/, '/') + 'staging/v0.42/';
   return tpl.evaluate().setTitle('Vocab Farm Island');
 }
 function data_() {
@@ -237,7 +237,7 @@ function studentSpecialBuy(session,expectedRevision){
   const day=magicDay_(),profile=p.profile;
   if(profile.version!==2||Number(profile.level)<5||Number(profile.gold)<MAGIC_COST)throw Error('Level 5 and 300 gold are required.');
   const ledger=magicLedger_(ss);
-  if(String(profile.specialSeedLastPurchase||'')===day||hasMagicPurchase_(ledger,user.id,day))throw Error('Only one Special Seed can be purchased per Vietnam day.');
+  // Purchases are no longer limited to one per day. Revision and lock checks still apply.
   profile.gold-=MAGIC_COST;
   if(!profile.seeds||typeof profile.seeds!=='object')profile.seeds={};
   profile.seeds.special=(Number(profile.seeds.special)||0)+1;
@@ -262,7 +262,7 @@ function studentSpecialReveal(session,plotIndex,expectedRevision){
   const chance=Math.floor(Math.random()*100);
   crop.rarity=chance<5?3:chance<30?2:1;
   crop.characterId=MAGIC_CHARACTERS[Math.floor(Math.random()*MAGIC_CHARACTERS.length)];
-  crop.stage=1;crop.retryAfter=0;crop.wrong=0;crop.nextDueAt=Date.now()+3*60*1000;
+  crop.stage=1;crop.retryAfter=0;crop.wrong=0;crop.nextDueAt=Date.now()+60*1000;
   delete crop.pendingReveal;
   p.profile.savedAt=Date.now();
   const rev=writeMagicProgress_(ss,p,user.id,p.profile);

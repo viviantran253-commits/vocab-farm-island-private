@@ -1,4 +1,4 @@
-# Vocab Farm Island — classroom game v0.30
+# Vocab Farm Island — classroom game v0.42
 
 ## Play
 
@@ -19,7 +19,8 @@ The live student Apps Script project is `Vocab Farm Student Game`. Its private S
 
 ## Code and updates
 
-- [v0.30 staging](staging/v0.30/README.md) retains the supplied candidate, source audit, and migration notes. The official student source has been promoted with production settings and uses its public assets.
+- [v0.42 source bundle](staging/v0.42/README_START_HERE.md) retains the supplied student candidate and public assets. The official student source merges its new features with the existing classroom login and private Sheet settings.
+- [v0.30 staging](staging/v0.30/README.md) remains as the previous source reference and rollback asset set.
 - `google-apps-script/student-app/` contains the live web app source. After editing it, copy changed files into the Apps Script project and **deploy a new version of the existing web app deployment**.
 - `google-apps-script/teacher-dashboard/` contains the separate Sheet-bound teacher dashboard source.
 - `game.js`, `style.css`, and `map-config.js` power the older `demo.html` only. The official game uses `google-apps-script/student-app/`.

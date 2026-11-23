@@ -19,11 +19,11 @@ const server = vm.createContext({
 });
 vm.runInContext(source, server);
 
-test('official deployment uses existing Sheet property and v0.30 asset directory', () => {
+test('official deployment uses existing Sheet property and v0.42 asset directory', () => {
   assert.equal(server.data_().id, 'private-teacher-sheet');
   assert.equal(server.include('GameCode'), 'raw:GameCode');
   assert.equal(server.doGet().title, 'Vocab Farm Island');
-  assert.equal(template.assetBaseUrl, 'https://example.github.io/vocab-farm-island-private/staging/v0.30/');
+  assert.equal(template.assetBaseUrl, 'https://example.github.io/vocab-farm-island-private/staging/v0.42/');
 });
 
 test('official migration preserves existing student progress and unknown item IDs', () => {

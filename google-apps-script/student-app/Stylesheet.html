@@ -421,7 +421,7 @@
 .collection-entry {min-width:0;display:flex;flex-direction:column;padding:11px;background:#fffbef;border:4px solid #74442a;outline:2px solid #d3a56c;outline-offset:-8px;border-radius:16px;box-shadow:0 5px 0 #ad7746;min-height:265px;color:#4e3525;}
 .collection-portrait {background:#e7f2dd;border:3px solid #c3cfaa;border-radius:11px;min-height:116px;height:126px;display:flex;align-items:center;justify-content:center;padding:8px;margin:2px 2px 10px}
 .collection-portrait img {display:block;width:102px;height:102px;max-width:100%;object-fit:contain;image-rendering:pixelated}
-.collection-entry.unknown .collection-portrait img {filter:grayscale(1) brightness(.17);opacity:.7}
+.collection-entry.unknown .collection-portrait img {filter:none;opacity:1}
 .collection-meta {display:flex;flex:1;flex-direction:column;gap:8px;text-align:center;align-items:center;justify-content:space-between;padding:0 2px 5px;min-width:0}
 .collection-name {display:flex;align-items:center;justify-content:center;min-height:40px;width:100%;font-size:clamp(15px,1.5vw,18px);line-height:1.18;font-weight:900;overflow-wrap:anywhere;word-break:normal}
 .collection-status {width:100%;padding:8px 4px;min-height:49px;border-radius:10px;background:#f7e9ce;border:1px solid #e1c493;display:flex;flex-direction:column;gap:7px;align-items:center;justify-content:center}
@@ -610,3 +610,113 @@
 .dev-menu-btn,.dev-login-banner,.developer-watermark,#recoverLoginButton,#updateNotice{display:none !important;}
 .hud-save-state[data-state="pending"]{color:#9c622a;}
 .hud-save-state[data-state="error"]{color:#b14435;}
+
+/* v0.31: Mobile-first controls, independent of the map canvas zoom. */
+@media (max-width:720px) {
+ .login-card input#studentSelect,.login-card input#passcode{width:100%;min-height:48px;font-size:18px;letter-spacing:.07em}
+ .login-card label{font-size:15px}
+ .login-card .primary-btn,.login-card .secondary-btn{min-height:48px;font-size:16px}
+ .hud{min-width:0;width:min(210px,51vw);padding:8px}
+ .hud-topline{font-size:clamp(13px,3.5vw,16px)}
+ .hud-gold,.hud-rank{font-size:13px}
+ .hud-save-state{font-size:12px}
+ .top-buttons{max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:flex-end}
+ .top-buttons .icon-btn{min-width:56px;min-height:58px;font-size:12px}
+ .travel-nav button{min-height:52px!important}
+ .zoom-controls button{min-width:44px;min-height:44px}
+ .modal-body button,.collection-details-hit{min-height:44px}
+}
+@media (max-width:390px){.top-buttons{top:calc(max(8px,env(safe-area-inset-top)) + 96px)}.hud{width:min(200px,53vw)}.travel-nav button span{font-size:clamp(12px,3.1vw,14px)!important}}
+
+@media (max-width:720px){.travel-nav button span{font-size:clamp(13px,3.8vw,16px)!important}}
+
+
+/* v0.33 — Mobile text readability and non-overlapping HUD/menu layout.
+   Applies only to mobile CSS; map/canvas camera zoom remains unchanged.
+   --vfi-top-buttons-y is measured against the actual HUD height by the
+   small presentation-only observer in the two HTML entry points. */
+@media (max-width:720px) {
+  .hud {
+    width:min(240px,64vw);
+    min-height:100px;
+    padding:9px;
+    gap:7px;
+  }
+  .hud-portrait {width:52px;height:61px;flex-shrink:0;}
+  .hud-topline {font-size:16px!important;line-height:1.22;}
+  .hud-topline strong {font-size:16px!important;}
+  .hud-gold,.hud-gold strong,.hud-gold span {font-size:14px!important;}
+  .xp-line,.xp-line span {font-size:14px!important;line-height:1.2;}
+  .hud-save-state {font-size:14px!important;line-height:1.22;overflow-wrap:anywhere;}
+  .hud-rank {font-size:13px!important;line-height:1.18;}
+  .level-pill {font-size:12px!important;}
+  .top-buttons {
+    top:var(--vfi-top-buttons-y,172px)!important;
+    right:max(8px,env(safe-area-inset-right));
+    width:min(352px,calc(100vw - 16px));
+    max-width:calc(100vw - 16px);
+    display:flex;
+    flex-wrap:nowrap;
+    justify-content:space-between;
+    gap:5px;
+    z-index:7;
+  }
+  .top-buttons .icon-btn {
+    flex:1 1 0;
+    width:0;
+    min-width:0!important;
+    height:76px!important;
+    min-height:76px!important;
+    padding:5px 2px;
+    font-size:14px!important;
+    line-height:1.15;
+    gap:2px;
+    overflow-wrap:anywhere;
+  }
+  .top-buttons .icon-btn span:not(.icon-emoji) {
+    display:block!important;
+    font-size:14px!important;
+    line-height:1.15;
+    white-space:normal;
+    text-align:center;
+    overflow-wrap:normal;
+    word-break:normal;
+  }
+  .top-buttons .icon-btn img{width:31px;height:31px;flex-shrink:0;}
+  .top-buttons .icon-emoji{font-size:27px;}
+  .area-hint {
+    top:calc(var(--vfi-top-menu-bottom,250px) + 8px)!important;
+    left:max(8px,env(safe-area-inset-left));
+    max-width:calc(100vw - 16px);
+  }
+  .quick-menus-v023 {width:calc(100vw - 16px);max-width:480px;}
+  .quick-menus-v023 button {
+    min-height:66px!important;
+    padding:7px 3px!important;
+    line-height:1.15;
+    white-space:normal;
+  }
+  .quick-menus-v023 button span,.travel-nav button span {
+    font-size:16px!important;
+    line-height:1.16;
+    white-space:normal!important;
+    overflow-wrap:anywhere;
+  }
+  .mobile-controls {bottom:calc(max(8px,env(safe-area-inset-bottom)) + 89px);}
+}
+
+/* v0.40: drag-to-pan map and inline Challenge results; no global map/UI scaling. */
+#gameCanvas{cursor:grab;touch-action:none}
+#gameCanvas.is-panning{cursor:grabbing}
+.zoom-controls #zoomFollow{min-height:44px;min-width:54px;font-size:12px!important;touch-action:manipulation}
+.challenge-question-info{flex:1;min-width:0}
+.challenge-answer-note{font-size:13px;line-height:1.35;margin-top:7px;padding:7px 9px;border-radius:9px;background:#e2f3da;color:#2b6436;border:1px solid #a8d198}
+.challenge-answer-note.incorrect{background:#fff0e7;color:#923f31;border-color:#e5b5a0}
+.challenge-just-answered{border-color:#83b36f!important}
+@media(max-width:720px){.zoom-controls #zoomFollow{min-width:52px!important;min-height:44px!important;font-size:12px!important}.challenge-answer-note{font-size:13px}}
+
+/* Keep map view controls below the HUD/top menu on narrow screens. */
+@media(max-width:720px){
+ .zoom-controls{top:calc(var(--vfi-top-menu-bottom,250px) + 10px)!important;bottom:auto!important;right:8px!important;max-width:calc(100vw - 16px);gap:3px;padding:3px 4px}
+ .area-hint{top:calc(var(--vfi-top-menu-bottom,250px) + 75px)!important}
+}
