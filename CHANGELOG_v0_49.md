@@ -1,6 +1,7 @@
 # Vocab Farm Island v0.49 — online account and save hardening
 
 - The online server computes gold, XP, inventory, crop stages, challenge rewards, orders, and companions from validated player actions. Browser-submitted totals no longer control those values.
+- Catalog lookups require real item IDs; inherited JavaScript property names cannot be used as purchase IDs.
 - New and reset student passcodes are six digits. Existing four-digit codes continue to work until reset. Logging out revokes the current student session.
 - Save requests replay against the latest saved profile. Action IDs prevent duplicate rewards, and history writes are deduplicated on retry. A rejected save returns the student to login so the latest saved game can be loaded.
 - Vocabulary reads use a short server cache. Progress reads use only needed columns, and save timing is reported to the browser console for diagnostics.
