@@ -72,3 +72,21 @@ test('online test actions reject student sessions and only update profile 11', (
   assert.equal(context.studentTestAction('teacher-test', 'special-seeds', null, revision).profile.seeds.special, 10);
   assert.equal(context.studentTestAction('teacher-test', 'add-gold', null, revision - 1).conflict, true);
 });
+
+test('teacher summary reads bounded progress and history columns', () => {
+  const saved={id:'01',level:3,gold:84,xpTotal:25,plots:Array.from({length:10},(_,i)=>({unlocked:i<3,crop:null})),harvest:{},badges:[]};
+  const sheets={
+    _Students:new Sheet([['ID','Name','Salt','Hash','Fails','Lock','Version','Updated','Login'],['01','An','salt','hash',0,0,1,'',1]]),
+    _Progress:new Sheet([['ID','Revision','Profile'],['01',2,JSON.stringify(saved)]]),
+    _History:new Sheet([['Event','Time','ID','Name','Source','Stage','Word','Answer','Expected','Result','Attempt'],['ev1',new Date(),'01','An','Farm','Water','carrot','n','n','Correct',1]]),
+    Vocab_01:new Sheet([['English'],['carrot']]),
+  };
+  const c=vm.createContext({SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:n=>sheets[n]})}});
+  vm.runInContext(fs.readFileSync('google-apps-script/teacher-dashboard/Admin.gs','utf8'),c);
+  c.requireTeacher_=()=>{};c.ensureLoginNumbers_=()=>{};
+  const summary=c.studentSummary('teacher-token').students[0];
+  assert.equal(summary.gold,84);
+  assert.equal(summary.words,1);
+  assert.equal(summary.correct,1);
+  assert.equal(summary.plotsUnlocked,3);
+});

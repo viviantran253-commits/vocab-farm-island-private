@@ -1006,7 +1006,7 @@ async function finishSpecialReveal(index,questionContext=null,actionDone=null){
   const message=`${petById(liveCrop).name} (${companionStars(liveCrop.rarity)}) revealed!`;
   const feedback=()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${word?wordCard(word,'neutral'):''}<div class="timer-block">${escapeHTML(message)}</div>`,'','feedback');
   if(actionDone){await actionDone;feedback();}else beginTimedAction('water',feedback,index);
- }catch(err){if(actionDone)await actionDone;toast('Reveal was not confirmed. Use Finish character reveal to retry. '+(err?.message||''),true);showSpecialPlot(index);}
+ }catch(err){if(actionDone)await actionDone;if(onlineToken){toast('Reveal was not confirmed. Use Finish character reveal to retry. '+(err?.message||''),true);showSpecialPlot(index);}}
  finally{specialServerBusy=false;}
 }
 function harvestSpecial(i){const plot=state.plots[i],c=plot?.crop;if(!c||c.type!=='special'||c.stage!==4||!isDue(c)||actionMotion)return;
