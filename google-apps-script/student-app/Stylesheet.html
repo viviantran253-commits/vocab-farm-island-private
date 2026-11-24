@@ -132,7 +132,6 @@
 .hud-rank{font-size:11px;font-weight:900;color:#24693b;line-height:1.1;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .zoom-controls{position:absolute;z-index:5;right:max(12px,env(safe-area-inset-right));top:96px;display:flex;align-items:center;gap:5px;background:#fff7dfec;border:2px solid #b68a54;border-radius:13px;padding:5px 7px;box-shadow:0 4px 12px #14342a55}
 .zoom-controls button{border:1px solid #b59158;border-radius:8px;background:#fffefa;min-height:36px;min-width:37px;font-size:19px;font-weight:900;color:#60442e}
-.zoom-controls #zoomFit{font-size:12px;padding:0 7px}
 .zoom-controls span{font-size:12px;font-weight:900;min-width:37px;text-align:center}
 .mission-timers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:2px 0 19px}
 .challenge-section{background:#fffdf4;border:2px solid #e3ca96;border-radius:15px;padding:13px 15px}
@@ -150,7 +149,6 @@
 /* v0.6: compact bottom-right zoom, anchored below the map and clear of touch controls */
 .zoom-controls{top:auto;right:max(12px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));padding:3px 5px;gap:3px;border-radius:10px;z-index:6;}
 .zoom-controls button{min-width:29px;min-height:29px;font-size:15px;padding:1px 5px;border-radius:7px;}
-.zoom-controls #zoomFit{font-size:11px;padding:1px 6px;}
 .zoom-controls span{font-size:11px;min-width:32px;}
 .hud-rank{white-space:normal;overflow:visible;text-overflow:clip;font-size:11px;line-height:1.2;}
 .spelling-area{position:relative;width:max-content;max-width:100%;margin:16px 0 2px;}
@@ -169,7 +167,6 @@
  .spelling-display{font-size:clamp(26px,7.3vw,38px);min-height:74px;padding:12px 10px;}
  .spell-hint{font-size:12px;}
 }
-@media(max-width:390px){.zoom-controls{bottom:calc(51px + env(safe-area-inset-bottom))}.zoom-controls #zoomFit{font-size:10px}}
 
 /* v0.7 — actual editable letters, integrated visually into the word */
 .spelling-area{max-width:100%;}
@@ -487,7 +484,6 @@
    max-width:calc(100vw - 16px);
  }
  .zoom-controls button {min-width:44px!important;min-height:44px!important;touch-action:manipulation}
- .zoom-controls #zoomFit {font-size:13px!important}
  .zoom-controls span {font-size:12px!important}
  .top-buttons .icon-btn span:not(.icon-emoji) {font-size:12px!important}
  .developer-watermark {bottom:calc(max(8px,env(safe-area-inset-bottom)) + 79px)!important;pointer-events:none}
@@ -713,12 +709,11 @@ body.teacher-test-mode .dev-menu-btn{display:flex!important;}
 /* v0.40: drag-to-pan map and inline Challenge results; no global map/UI scaling. */
 #gameCanvas{cursor:grab;touch-action:none}
 #gameCanvas.is-panning{cursor:grabbing}
-.zoom-controls #zoomFollow{min-height:44px;min-width:54px;font-size:12px!important;touch-action:manipulation}
 .challenge-question-info{flex:1;min-width:0}
 .challenge-answer-note{font-size:13px;line-height:1.35;margin-top:7px;padding:7px 9px;border-radius:9px;background:#e2f3da;color:#2b6436;border:1px solid #a8d198}
 .challenge-answer-note.incorrect{background:#fff0e7;color:#923f31;border-color:#e5b5a0}
 .challenge-just-answered{border-color:#83b36f!important}
-@media(max-width:720px){.zoom-controls #zoomFollow{min-width:52px!important;min-height:44px!important;font-size:12px!important}.challenge-answer-note{font-size:13px}}
+@media(max-width:720px){.challenge-answer-note{font-size:13px}}
 
 /* Keep map view controls below the HUD/top menu on narrow screens. */
 @media(max-width:720px){
@@ -746,8 +741,6 @@ body.teacher-test-mode .dev-menu-btn{display:flex!important;}
  .top-buttons .icon-emoji{font-size:21px!important}
  .top-buttons .icon-btn span:not(.icon-emoji){font-size:clamp(9px,2.6vw,11px)!important;line-height:1.05!important}
  .zoom-controls{top:calc(max(7px,env(safe-area-inset-top)) + 65px)!important;bottom:auto!important;right:max(7px,env(safe-area-inset-right))!important;gap:2px!important;padding:2px 3px!important;border-radius:9px}
- .zoom-controls button,.zoom-controls #zoomFollow{min-width:36px!important;min-height:36px!important;font-size:16px!important;padding:1px 3px!important}
- .zoom-controls #zoomFit,.zoom-controls #zoomFollow{font-size:10px!important}
  .zoom-controls span{min-width:31px!important;font-size:11px!important}
  .area-hint{top:calc(max(7px,env(safe-area-inset-top)) + 98px)!important;left:7px;font-size:10px;padding:3px 7px}
  .mobile-controls{display:block;left:max(12px,env(safe-area-inset-left));right:auto;bottom:calc(max(7px,env(safe-area-inset-bottom)) + 68px);z-index:6}
@@ -759,7 +752,6 @@ body.teacher-test-mode .dev-menu-btn{display:flex!important;}
  .quick-menus-v023 button{flex:1 1 0;min-width:0;min-height:46px!important;padding:3px 2px!important;font-size:15px!important;line-height:1!important;border-radius:8px}
  .quick-menus-v023 button span,.travel-nav button span{font-size:clamp(11px,3vw,13px)!important;line-height:1.1!important}
 }
-@media(max-width:360px){.zoom-controls{top:calc(max(7px,env(safe-area-inset-top)) + 87px)!important}.area-hint{top:calc(max(7px,env(safe-area-inset-top)) + 130px)!important}.top-buttons .icon-btn{width:42px!important}.zoom-controls button,.zoom-controls #zoomFollow{min-width:33px!important}}
 
 /* Compact login card; these rules do not change the desktop game interface. */
 .login-card{padding:18px 26px 24px}

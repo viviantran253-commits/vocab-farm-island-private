@@ -2,6 +2,8 @@
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
+const WALK_MASK = window.FARM_WALK_MASK;
+const WALK_BITS = WALK_MASK ? Uint8Array.from(atob(WALK_MASK.bits),char=>char.charCodeAt(0)) : null;
 const ASSET = 'assets/';
 // Use the official Apps Script backend and the teacher's private Sheet.
 const ONLINE = true;
@@ -32,7 +34,7 @@ const CROP_DATA = [
 const CROPS = Object.fromEntries(CROP_DATA.map(c => [c.id,c]));
 const SPECIAL_SEED={id:'special',name:'Special Seed',vi:'Hạt giống kỳ diệu',seed:300,level:5,mins:4};
 const SPECIAL_ACTIONS=['Water','Tend','Give Milk','Feed Meal'];
-const SPECIAL_ACTION_VI=['Tưới nước','Chăm sóc','Cho uống sữa','Cho ăn'];
+const SPECIAL_ACTION_VI=['Tưới cây','Chăm sóc','Cho uống sữa','Cho ăn'];
 const SPECIAL_ANIM=['water','tend','give_milk','feed_meal'];
 const CHARACTER_DATA=[
  {id:'itadori_yuji',name:'Itadori Yuji',phrases:[
@@ -156,14 +158,14 @@ const PLOT_UNLOCKS = [
   {level:15, price:700},{level:20, price:800}
 ];
 const STORAGE_PREFIX = 'vocabFarmDeveloperTest_v1_'; // SAME v0.18–v0.27 prefix: no forced reset
-const BUILD_ID='v0.45',BACKUP_EVERY_MS=10*60*1000;
+const BUILD_ID='v0.48',BACKUP_EVERY_MS=10*60*1000;
 const LAST_BUILD_PREFIX='vfi_last_build_v1_';
 let lastBackupAt=0,backupRunning=false,lastSaveErrorAt=0,pendingRecoveryImport=null;
 const BANK_KEY = 'vocabFarmDeveloperCustomBank_v1';
 const DAY_MS = 86400000;
 const ICT_OFFSET_MS = 7*3600000; // Vietnam UTC+07, no DST
 const RANKS = [
- ['Novice','Tay mơ'],['Apprentice','Học việc'],['Junior Farmer','Nông dân tập sự'],
+ ['Novice','Người mới'],['Apprentice','Học việc'],['Junior Farmer','Nông dân tập sự'],
  ['Gardener','Người làm vườn'],['Skilled Farmer','Nông dân lành nghề'],
  ['Farm Expert','Chuyên gia nông trại'],['Master Farmer','Bậc thầy nông trại'],
  ['Harvest Champion','Nhà vô địch thu hoạch'],['Island Guardian','Người bảo vệ hòn đảo'],
@@ -213,6 +215,28 @@ const SAMPLE_WORDS = [
   ['improve','/ɪmˈpruːv/','v','cải thiện','Practice can improve your English. (Luyện tập có thể cải thiện tiếng Anh của bạn.)'],
   ['patiently','/ˈpeɪ.ʃənt.li/','adv','một cách kiên nhẫn','She waits patiently. (Cô ấy chờ đợi một cách kiên nhẫn.)']
 ].map((v,i)=>({id:`sample_${i}`,english:v[0],ipa:v[1],pos:v[2],meaning:v[3],example:v[4]}));
+const POS_LABELS={
+ n:'Danh từ (n)',v:'Động từ (v)',adj:'Tính từ (adj)',adv:'Trạng từ (adv)',
+ 'n.phr':'Cụm danh từ (n. phr.)','v.phr':'Cụm động từ (v. phr.)',
+ 'adj.phr':'Cụm tính từ (adj. phr.)','adv.phr':'Cụm trạng từ (adv. phr.)',
+ phrasal:'Động từ kết hợp tiểu từ (phrasal verb)',idiom:'Thành ngữ (idiom)',
+ collocation:'Kết hợp từ (collocation)','n/v':'Danh từ hoặc động từ (n/v)'
+};
+const POS_NEIGHBORS={n:['n.phr','v','adj'],v:['v.phr','phrasal','n'],adj:['adj.phr','adv','n'],adv:['adv.phr','adj','v'],
+ 'n.phr':['n','v.phr','collocation'],'v.phr':['v','phrasal','collocation'],
+ 'adj.phr':['adj','n.phr','collocation'],'adv.phr':['adv','v.phr','collocation'],
+ phrasal:['v.phr','v','idiom'],idiom:['collocation','phrasal','v.phr'],
+ collocation:['idiom','n.phr','v.phr'],'n/v':['n','v','n.phr']};
+function canonicalPOS(raw,english=''){
+ const key=String(raw||'').trim().toLowerCase().replace(/[().\s_-]+/g,'');
+ const codes={n:'n',noun:'n',v:'v',verb:'v',adj:'adj',adjective:'adj',adv:'adv',adverb:'adv',
+  nphr:'n.phr',nounphrase:'n.phr',vphr:'v.phr',verbphrase:'v.phr',phrv:'v.phr',phr:'v.phr',
+  adjphr:'adj.phr',adjectivephrase:'adj.phr',advphr:'adv.phr',adverbphrase:'adv.phr',
+  phrasalverb:'phrasal',phrasal:'phrasal',idiom:'idiom',collocation:'collocation',nv:'n/v'};
+ const pos=codes[key]||null;
+ return String(english).trim().toLowerCase()==='focus on'&&pos==='v'?'v.phr':pos;
+}
+const posLabel=pos=>POS_LABELS[pos]||String(pos||'');
 const SPECIAL_DISTRACTORS = {planet:{en:['plane','plant','platform'],meaning:['máy bay','cây','nền tảng']},library:{en:['liberty','laboratory','literary']},beautiful:{en:['bountiful','beauty','careful']},protect:{en:['project','protest','produce']}};
 const $ = id => document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -244,7 +268,7 @@ let images={};
 let assetsLoading=0;
 let player={x:880,y:495,dir:'down',moving:false,frame:0,animMs:0};
 let camera={x:0,y:0};
-let cameraManual=false; // User-dragged view; game positions and student saves are unchanged.
+let cameraManual=false,cameraManualUntil=0; // Brief touch pan, then follow the farmer automatically.
 let zoom=.9,zoomPreference=null,viewW=window.innerWidth,viewH=window.innerHeight,dpr=1;
 let keys=new Set();let touchDirs=new Set();let path=[];let autoAction=null;
 let joystickVector={x:0,y:0},joystickPointerId=null;
@@ -388,7 +412,7 @@ const ACTION_EXIT_MS = 300;
 function beginTimedAction(kind,onComplete,plotIndex=null){
  if(actionMotion)return;
  closeModal();player.moving=false;path=[];autoAction=null;keys.clear();touchDirs.clear();resetJoystick();
- const text=({plant:'Planting · Đang gieo hạt',water:'Watering · Đang tưới cây',tend:'Tending · Đang chăm sóc',fertilize:'Fertilizing · Đang bón phân',give_milk:'Giving milk · Cho uống sữa',feed_meal:'Feeding a meal · Cho ăn',harvest:'Harvesting · Đang thu hoạch'})[kind]||kind;
+ const text=({plant:'Planting · Đang trồng',water:'Watering · Đang tưới cây',tend:'Tending · Đang chăm sóc',fertilize:'Fertilizing · Đang bón phân',give_milk:'Giving milk · Đang cho uống sữa',feed_meal:'Feeding a meal · Đang cho ăn',harvest:'Harvesting · Đang thu hoạch'})[kind]||kind;
  const plot=plotIndex===null?null:CROP_PLOT(plotIndex);
  const center=plot?{x:plot.x+plot.width/2,y:plot.y+plot.height/2+7}:{x:player.x,y:player.y};
  const exit=plot?nearestValid({x:center.x,y:plot.y+plot.height+28}):{...center};
@@ -426,7 +450,7 @@ function advanceFarmAction(t){
 
 
 function loadBank(){
-  try{let custom=JSON.parse(localStorage.getItem(BANK_KEY)||'[]');if(Array.isArray(custom))bank=[...SAMPLE_WORDS,...custom.filter(w=>w&&w.english&&w.meaning&&w.pos)];}catch(e){console.warn('Unable to read local vocabulary:',e);}
+  try{let custom=JSON.parse(localStorage.getItem(BANK_KEY)||'[]');if(Array.isArray(custom))bank=[...SAMPLE_WORDS,...custom.filter(w=>w&&w.english&&w.meaning&&canonicalPOS(w.pos,w.english)).map(w=>({...w,pos:canonicalPOS(w.pos,w.english)}))];}catch(e){console.warn('Unable to read local vocabulary:',e);}
 }
 function newProfile(slot){return {
   version:2,saveSchemaVersion:1,id:slot,name:`Student ${slot}`,gold:30,level:1,xp:0,xpTotal:0,
@@ -500,16 +524,15 @@ function logAnswer(word,source,stage,answer,correct,attempt){const entry={eventI
 function loadImage(path){if(images[path])return images[path];const i=new Image();images[path]=i;i.src=path;i.onload=()=>{assetsLoading++;};i.onerror=()=>{console.warn('Missing image',path)};return i;}
 function asset(path){return loadImage(path)}
 function drawImage(ctx,path,x,y,w,h){const im=asset(path);if(im.complete&&im.naturalWidth>0)ctx.drawImage(im,x,y,w,h)}
-function preload(){const paths=[MAP.layers.background,...MAP.layers.buildings.map(b=>b.asset),...MAP.foreground_overlays.map(o=>o.asset),
- ...['girl_walk_down','girl_walk_up','girl_walk_left','girl_walk_right','girl_idle_4dir','girl_plant','girl_water','girl_tend','girl_fertilize','girl_give_milk','girl_feed_meal','girl_harvest'].map(s=>`assets/characters/girl/${s}.png`),
- ...['plot_tilled','plot_seeded','plot_watered','plot_fertilized','plot_locked'].map(s=>`assets/plots/${s}.png`),
- ...CROP_DATA.flatMap(c=>STAGES.map((v,i)=>`assets/crops/${c.id}/${c.id}_0${i}_${v}.png`)),
- specialSeedArt,specialSeedShopArt,'assets/fences/fence_horizontal.png','assets/fences/fence_vertical.png',
- ...DECOR_ITEMS.map(decorArt),
- ...CHARACTER_DATA.flatMap(c=>[
-  ...[1,2,3,4].map((n)=>companionArt(c.id,'growth',`0${n}_${['','newborn','baby','young','final'][n]}`)),
-  ...['down','up','left','right'].flatMap(d=>[companionArt(c.id,'sheets',`walk_${d}`),companionArt(c.id,'idle',`idle_${d}`)])
- ]),...['growth_transformation','harvest_celebration','happy_reaction','pet_selection_ring'].map(effectPath)];paths.forEach(loadImage);}
+function preload(){
+ // Load only the map and the sprites currently visible. asset() loads later
+ // variants on first use, so a new companion never delays the login screen.
+ const paths=[MAP.layers.background,...MAP.layers.buildings.map(b=>b.asset),
+  ...MAP.foreground_overlays.map(o=>o.asset),'assets/characters/girl/girl_idle_4dir.png',
+  ...['plot_tilled','plot_seeded','plot_watered','plot_fertilized','plot_locked'].map(s=>`assets/plots/${s}.png`),
+  ...state.plots.map((plot,index)=>plot.crop?plotArt(index):null).filter(Boolean)];
+ [...new Set(paths)].forEach(loadImage);
+}
 
 const canvas=$('gameCanvas');const ctx=canvas.getContext('2d',{alpha:false});
 function resize(){const rc=canvas.getBoundingClientRect();viewW=Math.max(1,rc.width);viewH=Math.max(1,rc.height);dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(viewW*dpr);canvas.height=Math.round(viewH*dpr);
@@ -522,27 +545,26 @@ function centeredCamera(value,worldExtent,visibleExtent){
  return max<=0?max/2:clamp(value,0,max);
 }
 function setZoom(v){
- const centerX=camera.x+viewW/(2*zoom),centerY=camera.y+viewH/(2*zoom);
  zoomPreference=clamp(v,mapFitZoom(),2.3);zoom=zoomPreference;
- if(cameraManual){
-  camera.x=centeredCamera(centerX-viewW/(2*zoom),MAP.world.width,viewW/zoom);
-  camera.y=centeredCamera(centerY-viewH/(2*zoom),MAP.world.height,viewH/zoom);
- }
- // Fit snaps to the exact centered world, no drifting toward a clamped corner.
- if(Math.abs(zoom-mapFitZoom())<0.00001){
-   camera.x=(MAP.world.width-viewW/zoom)/2;
-   camera.y=(MAP.world.height-viewH/zoom)/2;
- }
+ cameraManual=false;
+ camera.x=centeredCamera(player.x-viewW/(2*zoom),MAP.world.width,viewW/zoom);
+ camera.y=centeredCamera(player.y-viewH/(2*zoom),MAP.world.height,viewH/zoom);
  updateZoomLabel();
 }
 function updateZoomLabel(){const label=$('zoomValue');if(label)label.textContent=Math.round(zoom*100)+'%';}
-function followPlayer(){cameraManual=false;camera.x=centeredCamera(player.x-viewW/(2*zoom),MAP.world.width,viewW/zoom);camera.y=centeredCamera(player.y-viewH/(2*zoom),MAP.world.height,viewH/zoom);$('gameCanvas').classList.remove('is-panning');}
 
 function inPolygon(p,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){
  const a=poly[i],b=poly[j];if((a[1]>p.y)!==(b[1]>p.y)&&(p.x<(b[0]-a[0])*(p.y-a[1])/(b[1]-a[1])+a[0]))inside=!inside;}return inside;}
 function insideRect(x,y,r){return x>=r[0]&&x<=r[0]+r[2]&&y>=r[1]&&y<=r[1]+r[3]}
+function artLand(x,y){
+ if(!WALK_BITS)return inPolygon({x,y},MAP.land_regions.main_island.polygon)||inPolygon({x,y},MAP.land_regions.shop_island.polygon)||insideRect(x,y,[1294,415,240,146]);
+ const cx=Math.floor(x/WALK_MASK.cell),cy=Math.floor(y/WALK_MASK.cell);
+ if(cx<0||cy<0||cx>=WALK_MASK.width||cy>=WALK_MASK.height)return false;
+ const bit=cy*WALK_MASK.width+cx;
+ return !!(WALK_BITS[bit>>3]&(1<<(bit&7)));
+}
 function walkable(x,y){if(x<15||y<15||x>MAP.world.width-15||y>MAP.world.height-15)return false;
- const land=inPolygon({x,y},MAP.land_regions.main_island.polygon)||inPolygon({x,y},MAP.land_regions.shop_island.polygon)||insideRect(x,y,[1294,415,240,146]);
+ const land=artLand(x,y);
  if(!land)return false;
  // Solid building footprints. The girl stops outside the door to interact.
  const blocks=[[762,175,202,204],[1645,282,241,217],[133,955,208,227]];
@@ -564,7 +586,7 @@ function pathfind(start,end){const dest=nearestValid(end);const cols=Math.ceil(M
  }
  return null;
 }
-function lineClear(a,b){const steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/12);for(let i=1;i<steps;i++){const p={x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps};if(!canPlayerStand(p.x,p.y))return false;}return true}
+function lineClear(a,b){const steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/5);for(let i=1;i<=steps;i++){const p={x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps};if(!canPlayerStand(p.x,p.y))return false;}return true}
 function compressPath(points){if(points.length<2)return points;const out=[points[0]];let from=0;while(from<points.length-1){let until=from+1;for(let j=from+2;j<points.length;j++){if(lineClear(points[from],points[j]))until=j;else break;}out.push(points[until]);from=until;}return out.slice(1)}
 function goTo(pos,onArrival){if(!playing)return;const target=nearestValid(pos);const start={x:player.x,y:player.y};let route=null;
  if(Math.hypot(start.x-target.x,start.y-target.y)<38){path=[];autoAction=null;if(onArrival)onArrival();return true;}
@@ -610,7 +632,8 @@ function updateMovement(dt){if(actionMotion)return;let vx=joystickVector.x,vy=jo
  // Directional controls deliberately return the camera to its familiar follow mode.
  if(vx||vy){const manuallySteered=joystickVector.x||joystickVector.y||[...keys,...touchDirs].some(k=>['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','up','down','left','right'].includes(k));if(manuallySteered)cameraManual=false;}
  if(player.moving){if(Math.abs(vx)>Math.abs(vy))player.dir=vx>0?'right':'left';else player.dir=vy>0?'down':'up';const nx=player.x+vx*speed*dt,ny=player.y+vy*speed*dt;
- if(canPlayerStand(nx,ny)){player.x=nx;player.y=ny;}else{if(canPlayerStand(nx,player.y))player.x=nx;else if(canPlayerStand(player.x,ny))player.y=ny;else if(path.length){path=[];autoAction=null;}}player.animMs+=dt*1000;player.frame=Math.floor(player.animMs/130)%4;}
+ const from={x:player.x,y:player.y};
+ if(lineClear(from,{x:nx,y:ny})){player.x=nx;player.y=ny;}else{if(lineClear(from,{x:nx,y:player.y}))player.x=nx;else if(lineClear(from,{x:player.x,y:ny}))player.y=ny;else if(path.length){path=[];autoAction=null;}}player.animMs+=dt*1000;player.frame=Math.floor(player.animMs/130)%4;}
  else{player.animMs=0;player.frame=0;}
 }
 function isDue(crop){return crop&&now()>=crop.nextDueAt}
@@ -619,6 +642,7 @@ function renderWorld(){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#2698e0'
  const targetX=player.x-viewW/(2*zoom),targetY=player.y-viewH/(2*zoom);
  const visibleW=viewW/zoom,visibleH=viewH/zoom;
  const goalX=centeredCamera(targetX,MAP.world.width,visibleW),goalY=centeredCamera(targetY,MAP.world.height,visibleH);
+ if(cameraManual&&performance.now()>cameraManualUntil)cameraManual=false;
  if(cameraManual){
   camera.x=centeredCamera(camera.x,MAP.world.width,visibleW);
   camera.y=centeredCamera(camera.y,MAP.world.height,visibleH);
@@ -712,12 +736,12 @@ function speakVocabularyWord(word){
 }
 function wordCard(w,status='neutral'){
  const marker=status==='correct'?'<span class="mark-good">✓ </span>':status==='incorrect'?'<span class="mark-bad">× </span>':'';
- return `<div class="word-card"><div class="word-line">${marker}<strong>${escapeHTML(w.english)}</strong><button class="speak-word" type="button" data-pronounce="${escapeHTML(w.english)}" aria-label="Play British pronunciation of ${escapeHTML(w.english)}" title="Listen · Nghe phát âm Anh-Anh">🔊</button> <span class="word-ipa">${escapeHTML(w.ipa)} (${escapeHTML(w.pos)})</span>: <strong>${escapeHTML(w.meaning)}</strong></div><div class="example"><strong>Ví dụ:</strong> ${escapeHTML(w.example)}</div></div>`;
+ return `<div class="word-card"><div class="word-line">${marker}<strong>${escapeHTML(w.english)}</strong><button class="speak-word" type="button" data-pronounce="${escapeHTML(w.english)}" aria-label="Play British pronunciation of ${escapeHTML(w.english)}" title="Listen · Nghe phát âm Anh-Anh">🔊</button> <span class="word-ipa">${escapeHTML(w.ipa)} · ${escapeHTML(posLabel(w.pos))}</span>: <strong>${escapeHTML(w.meaning)}</strong></div><div class="example"><strong>Ví dụ:</strong> ${escapeHTML(w.example)}</div></div>`;
 }
-function showPlantVocabulary(word,nextLabel){
+function showPlantVocabulary(word){
  if(plantReadTicker){clearInterval(plantReadTicker);plantReadTicker=null;}
  plantReadUntil=now()+8000;
- const markup=`<div class="plant-reading-top"><strong>Read and learn · Đọc và học</strong><span class="plant-reading-clock" id="plantReadingClock" role="timer" aria-label="Minimum reading time remaining">0:08</span></div>${wordCard(word,'neutral')}<div class="timer-block plant-reading-next">${escapeHTML(nextLabel)}</div><p id="plantReadingReady" class="plant-reading-ready" role="status" aria-live="polite"></p>`;
+ const markup=`<div class="plant-reading-top"><strong>Read and learn · Đọc và học</strong><span class="plant-reading-clock" id="plantReadingClock" role="timer" aria-label="Minimum reading time remaining">0:08</span></div>${wordCard(word,'neutral')}<p id="plantReadingReady" class="plant-reading-ready" role="status" aria-live="polite"></p>`;
  openModal('Vocabulary · Từ vựng',markup,'8 SECONDS TO READ · 8 GIÂY ĐỂ ĐỌC','plant-exposure');
  const update=()=>{
   if(activeModal!=='plant-exposure'){clearInterval(plantReadTicker);plantReadTicker=null;plantReadUntil=0;return;}
@@ -882,7 +906,7 @@ function sellFence(){
  save();updateHUD();showOwnedDecorations();toast(`Wooden Fence sold for ${reward} gold.`);
 }
 function showInventory(){const section=(kind,label,list)=>`<h3 class="section-heading">${label}</h3><div class="inventory-grid">${list.map(c=>`<div class="inventory-cell">${img(cropIcon(c.id,kind==='seed'?'seed':'harvested'))}<span>${escapeHTML(c.name)}</span><small>× ${kind==='seed'?(state.seeds[c.id]||0):(state.harvest[c.id]||0)}</small></div>`).join('')}</div>`;
- openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${state.seeds.special||0}${pendingSpecialPurchase?' · purchase pending':''}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,'INVENTORY • SAVED IN THIS BROWSER','inventory');}
+ openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${state.seeds.special||0}${pendingSpecialPurchase?' · purchase pending':''}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,ONLINE?'INVENTORY • SAVED TO GOOGLE SHEETS':'INVENTORY • SAVED IN THIS BROWSER','inventory');}
 // v0.24: Bottom shortcuts show purchased items, never the shops.
 // Keep these menus separate from the full Bag, which includes harvested crops.
 function showOwnedDecorations(){
@@ -932,15 +956,15 @@ function showPlot(i){const p=state.plots[i],assetPreview=plotArt(i);if(!p.unlock
  if(!p.crop){return openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img('assets/plots/plot_tilled.png')}<div><h3>Choose a seed</h3></div></div><h3 class="section-heading">Your available seeds</h3><div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><small>Owned: ${state.seeds[c.id]||0}</small><span class="subtext">${c.mins} min total</span><button class="primary-btn" data-do="plant" data-index="${i}" data-crop="${c.id}" ${!(state.seeds[c.id]>0)?'disabled':''}>Plant seed</button></div>`).join('')}</div><h3 class="section-heading">Special Seed</h3><div class="item-card">${img(specialSeedArt)}<strong>Magical character seed</strong><small>Owned: ${state.seeds.special||0} · Four care questions</small><button class="primary-btn" data-do="plant-special" data-index="${i}" ${!(state.seeds.special>0)?'disabled':''}>Plant Special Seed</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Buy more seeds</button></div>`,'PLANTING • VOCABULARY','plot');}
  if(p.crop.type==='special')return showSpecialPlot(i);
  const crop=p.crop,c=CROPS[crop.type],due=isDue(crop),stage=cropStage(crop),readyName=ACTIONS[crop.stage];let msg;
- if(due){msg=`<div class="timer-block"><strong>🔔 ${readyName} is ready! · ${ACTION_VI[crop.stage]} đã sẵn sàng!</strong>${crop.retryAfter>now()?`<span class="tag danger">Retry available in <span class="retry-live" data-until="${crop.retryAfter}">${formatSeconds(crop.retryAfter-now())}</span></span>`:''}</div>`;}
- else{msg=`<div class="timer-block"><div class="smallcaps">Next: ${readyName} · ${ACTION_VI[crop.stage]}</div><div class="timer-number live-countdown" data-until="${crop.nextDueAt}">${formatSeconds(crop.nextDueAt-now())}</div></div>`;}
- openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img(assetPreview)}<div><h3>${escapeHTML(c.name)}</h3><p>Stage ${stage+1}/5</p></div></div>${msg}<div class="button-row">${due?`<button class="primary-btn" data-do="start-question" data-index="${i}" ${crop.retryAfter>now()?'disabled':''}>${readyName} · ${ACTION_VI[crop.stage]}</button>`:''}<button class="secondary-btn" data-do="inventory">🎒 Inventory</button></div>`,'FARM • GROW YOUR VOCABULARY','plot');}
+ if(due){msg=crop.retryAfter>now()?`<div class="timer-block">Try again in <span class="retry-live" data-until="${crop.retryAfter}">${formatSeconds(crop.retryAfter-now())}</span></div>`:'';}
+ else{msg=`<div class="timer-block"><div class="smallcaps">Ready in</div><div class="timer-number live-countdown" data-until="${crop.nextDueAt}">${formatSeconds(crop.nextDueAt-now())}</div></div>`;}
+ openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img(assetPreview)}<div><h3>${escapeHTML(c.name)}</h3><p>Stage ${stage+1}/5</p></div></div>${msg}<div class="button-row">${due?`<button class="primary-btn" data-do="start-question" data-index="${i}" ${crop.retryAfter>now()?'disabled':''}>${readyName} · ${ACTION_VI[crop.stage]}</button>`:''}</div>`,'FARM • GROW YOUR VOCABULARY','plot');}
 function plantSpecial(i){
  const plot=state.plots[i];if(!plot||!plot.unlocked||plot.crop||!(state.seeds.special>0)||actionMotion)return;
  if(ONLINE&&!bank.length){toast('Your teacher must add vocabulary first.',true);return;}
  const wid=chooseWord(),w=wordById(wid);state.seeds.special--;
  plot.crop={type:'special',stage:0,wordId:wid,wordData:w,nextDueAt:now()+cropInterval(SPECIAL_SEED),retryAfter:0,wrong:0};
- save();if(ONLINE)flushOnline();updateHUD();beginTimedAction('plant',()=>showPlantVocabulary(w,'Next: Water the Special Seed'),i);
+ save();if(ONLINE)flushOnline();updateHUD();beginTimedAction('plant',()=>showPlantVocabulary(w),i);
 }
 function showSpecialPlot(i){
  const p=state.plots[i],c=p.crop,due=isDue(c);if(!c||c.type!=='special')return;
@@ -948,7 +972,7 @@ function showSpecialPlot(i){
  const done=c.stage===4;const title=pending?'Finish character reveal':done?'Harvest companion':SPECIAL_ACTIONS[c.stage];const vi=pending?'Hoàn tất mở nhân vật':done?'Thu hoạch':SPECIAL_ACTION_VI[c.stage];
  const character=c.characterId?petById(c).name:'Mystery character';const tag=c.rarity?companionStars(c.rarity):'???';
  const timer=due?'Ready now':formatSeconds(c.nextDueAt-now());
- openModal(`Special Seed · Plot ${i+1}`,`<div class="plot-banner">${img(specialGrowthArt(c))}<div><h3>${escapeHTML(character)}</h3><p>${escapeHTML(tag)} · Stage ${c.stage+1}/5</p></div></div><div class="timer-block">${escapeHTML(title)} · ${escapeHTML(vi)}<br><strong class="live-countdown" data-until="${c.nextDueAt}">${escapeHTML(timer)}</strong></div><div class="button-row">${due?`<button class="primary-btn" data-do="${pending?'finish-special-reveal':done?'harvest-special':'start-question'}" data-index="${i}" ${c.retryAfter>now()?'disabled':''}>${escapeHTML(title)}</button>`:''}<button class="secondary-btn" data-do="inventory">Inventory</button></div>`,'SPECIAL SEED • MAGIC COMPANION','plot');
+ openModal(`Special Seed · Plot ${i+1}`,`<div class="plot-banner">${img(specialGrowthArt(c))}<div><h3>${escapeHTML(character)}</h3><p>${escapeHTML(tag)} · Stage ${c.stage+1}/5</p></div></div>${due?(c.retryAfter>now()?`<div class="timer-block">Try again in <span class="retry-live" data-until="${c.retryAfter}">${formatSeconds(c.retryAfter-now())}</span></div>`:''):`<div class="timer-block">Ready in <strong class="live-countdown" data-until="${c.nextDueAt}">${escapeHTML(timer)}</strong></div>`}<div class="button-row">${due?`<button class="primary-btn" data-do="${pending?'finish-special-reveal':done?'harvest-special':'start-question'}" data-index="${i}" ${c.retryAfter>now()?'disabled':''}>${escapeHTML(title)} · ${escapeHTML(vi)}</button>`:''}</div>`,'SPECIAL SEED • MAGIC COMPANION','plot');
 }
 async function finishSpecialReveal(index,questionContext=null,actionDone=null){
  if(!ONLINE||specialServerBusy)return;
@@ -999,7 +1023,7 @@ function plantCrop(i,id){const plot=state.plots[i],c=CROPS[id];if(!plot?.unlocke
  const wId=chooseWord();const w=wordById(wId);
  // The carrot wait is now 30 seconds per care stage (normal mode), measured from planting; the 2-second action animation is included.
  state.seeds[id]--;plot.crop={type:id,wordId:wId,wordData:w,stage:0,nextDueAt:now()+cropInterval(c),retryAfter:0,wrong:0};save();if(ONLINE)flushOnline();updateHUD();
- beginTimedAction('plant',()=>showPlantVocabulary(w,'Next: Water the crop · Tiếp theo: Tưới cây'),i);
+ beginTimedAction('plant',()=>showPlantVocabulary(w),i);
 }
 
 function showHarbour(){initOrders();const expire=formatSeconds(state.ordersExpire-now());const orderHtml=state.orders.map((o,i)=>{
@@ -1044,15 +1068,15 @@ function showCompanionDetail(characterId){
   <div class="button-row"><button class="secondary-btn" data-do="companions">← Back to Collection</button></div>
  `,'COMPANION DETAILS · WORD PRACTICE','companion-detail');
 }
-function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}<button class="secondary-btn" data-do="companions">✨ Companions</button>${ONLINE&&onlineTestMode?'<button class="secondary-btn" data-do="dev-tools">🧪 Test controls</button>':''}<button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div><p class="fine-print">${ONLINE?'Class progress is saved in the teacher’s private Google Sheet.':'Offline demo: progress stays in this browser.'}</p>`,'YOUR FARM • PERSONAL PROGRESS','house');}
+function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}${ONLINE&&onlineTestMode?'<button class="secondary-btn" data-do="dev-tools">🧪 Test controls</button>':''}<button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div><p class="fine-print">${ONLINE?'Class progress is saved in the teacher’s private Google Sheet.':'Offline demo: progress stays in this browser.'}</p>`,'YOUR FARM • PERSONAL PROGRESS','house');}
 
 // -------------------- Vocabulary questions --------------------
 function editDistance(a,b){a=slug(a);b=slug(b);const dp=Array(b.length+1).fill(0).map((_,i)=>i);for(let i=1;i<=a.length;i++){let prev=dp[0];dp[0]=i;for(let j=1;j<=b.length;j++){let temp=dp[j];dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=temp;}}return dp[b.length]}
 function distractors(w,field){const extras=SPECIAL_DISTRACTORS[slug(w.english)]||{};let candidates=[];
  if(field==='en'&&extras.en)candidates.push(...extras.en);
  if(field==='meaning'&&extras.meaning)candidates.push(...extras.meaning);
- const sorted=bank.filter(x=>x.id!==w.id).sort((a,b)=>editDistance(a.english,w.english)-editDistance(b.english,w.english));
- candidates.push(...sorted.map(x=>field==='en'?x.english:x.meaning));
+ const sorted=bank.filter(x=>x.id!==w.id).map(x=>({word:x,distance:editDistance(x.english,w.english)})).sort((a,b)=>a.distance-b.distance);
+ candidates.push(...sorted.map(x=>field==='en'?x.word.english:x.word.meaning));
  return [...new Set(candidates.map(x=>String(x).trim()).filter(x=>slug(x)!==slug(field==='en'?w.english:w.meaning)))].slice(0,3);
 }
 function maskWord(s){const parts=[...s];let indices=[];for(let i=0,k=0;i<parts.length;i++)if(/[a-z]/i.test(parts[i])){if(k%2===1)indices.push(i);k++;}if(!indices.length){const fi=parts.findIndex(x=>/[a-z]/i.test(x));if(fi>=0)indices=[fi];}
@@ -1063,13 +1087,14 @@ function englishExample(w){
 }
 function hasOtherPOS(w){return bank.some(other=>other.id!==w.id&&slug(other.english)===slug(w.english)&&other.pos!==w.pos);}
 function makeQuestion(w,stage){
- if(stage===0){const opts=shuffled([{v:'adv',label:'trạng từ (adv)'},{v:'v',label:'động từ (v)'},{v:'n',label:'danh từ (n)'},{v:'adj',label:'tính từ (adj)'}]);
-  return {stage,type:'pos',title:`Loại từ của “<strong>${escapeHTML(w.english)}</strong>” trong câu:<br><span class="question-context">${escapeHTML(englishExample(w))}</span>`,options:opts.map(x=>({value:x.v,label:x.label})),correct:w.pos};}
+ if(stage===0){const choices=[w.pos,...(POS_NEIGHBORS[w.pos]||['n','v','adj'])].filter((value,index,array)=>POS_LABELS[value]&&array.indexOf(value)===index).slice(0,4);
+  const opts=shuffled(choices.map(v=>({v,label:posLabel(v)})));
+  return {stage,type:'pos',title:`Từ loại của “<strong>${escapeHTML(w.english)}</strong>” trong câu:<br><span class="question-context">${escapeHTML(englishExample(w))}</span>`,options:opts.map(x=>({value:x.v,label:x.label})),correct:w.pos};}
  if(stage===1){const opts=shuffled([w.meaning,...distractors(w,'meaning')]);
-  return {stage,type:'meaning',title:`“<strong>${escapeHTML(w.english)}</strong>”${hasOtherPOS(w)?` (${escapeHTML(w.pos)})`:''} nghĩa là:`,options:opts.map(x=>({value:x,label:x})),correct:w.meaning};}
+  return {stage,type:'meaning',title:`“<strong>${escapeHTML(w.english)}</strong>”${hasOtherPOS(w)?` (${escapeHTML(posLabel(w.pos))})`:''} nghĩa là:`,options:opts.map(x=>({value:x,label:x})),correct:w.meaning};}
  if(stage===2){const opts=shuffled([w.english,...distractors(w,'en')]);
-  return {stage,type:'english',title:`“<strong>${escapeHTML(w.meaning)}</strong>” (${escapeHTML(w.pos)}) tiếng Anh gọi là:`,options:opts.map(x=>({value:x,label:x})),correct:w.english};}
- const mask=maskWord(w.english);return {stage,type:'spelling',title:`Điền vào chữ cái còn thiếu: <strong>${escapeHTML(w.meaning)}</strong> (${escapeHTML(w.pos)}).`,mask:mask.masked,indices:mask.indices,correct:w.english};
+  return {stage,type:'english',title:`“<strong>${escapeHTML(w.meaning)}</strong>” (${escapeHTML(posLabel(w.pos))}) tiếng Anh gọi là:`,options:opts.map(x=>({value:x,label:x})),correct:w.english};}
+ const mask=maskWord(w.english);return {stage,type:'spelling',title:`Điền vào chữ cái còn thiếu: <strong>${escapeHTML(w.meaning)}</strong> (${escapeHTML(posLabel(w.pos))}).`,mask:mask.masked,indices:mask.indices,correct:w.english};
 }
 function startFarmQuestion(i){const p=state.plots[i];if(!p?.crop||!isDue(p.crop)||p.crop.type==='special'&&p.crop.stage===4){showPlot(i);return;}if(p.crop.retryAfter>now()){showPlot(i);return;}
  const w=p.crop.wordData||wordById(p.crop.wordId);qContext={kind:'farm',plotIndex:i,word:w,stage:p.crop.stage,question:makeQuestion(w,p.crop.stage),selection:null};renderQuestion();}
@@ -1213,7 +1238,7 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
  const correct=slug(given)===slug(correctValue);
  if(q.kind==='daily'||q.kind==='weekly'){
   syncDaily();const weekly=q.kind==='weekly',entry=weekly?state.weekly:state.daily;
-  if(q.period!==(weekly?entry.week:entry.day)){showMissions();toast('Challenges have reset · Đã làm mới thử thách.');return;}
+  if(q.period!==(weekly?entry.week:entry.day)){showMissions();toast('Challenges have reset · Thử thách đã được làm mới.');return;}
   if(entry.answers[q.word.id])return;
   entry.answers[q.word.id]={time:now(),correct,answer:given};const reward=weekly?5:3;
   if(correct){entry.correct++;state.gold+=reward;}
@@ -1246,21 +1271,21 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
   if(phase===0){const r=rollCompanion();crop.characterId=r.characterId;crop.rarity=r.rarity;}
   crop.stage++;crop.nextDueAt=phase===3?now():now()+cropInterval(SPECIAL_SEED);
   const pxy=CROP_PLOT(q.plotIndex);spawnEffect('growth_transformation',pxy.x+pxy.width/2,pxy.y+40);
-  const outcome=phase===0?`${petById(crop).name} (${companionStars(crop.rarity)}) revealed!`:phase===3?`${petById(crop).name} is ready to harvest!`:`Next care: ${SPECIAL_ACTIONS[crop.stage]}`;
+  const outcome=phase===0?`${petById(crop).name} (${companionStars(crop.rarity)}) revealed!`:phase===3?`${petById(crop).name} is ready to harvest!`:'';
   save();if(ONLINE)flushOnline();updateHUD();
-  beginTimedAction(SPECIAL_ANIM[phase],()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${wordCard(q.word,'neutral')}<div class="timer-block">${escapeHTML(outcome)}</div>`,'','feedback'),q.plotIndex);
+  beginTimedAction(SPECIAL_ANIM[phase],()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${wordCard(q.word,'neutral')}${outcome?`<div class="timer-block">${escapeHTML(outcome)}</div>`:''}`,'','feedback'),q.plotIndex);
   return;
  }
  crop.wrong=0;crop.retryAfter=0;const isHarvest=crop.stage===3;
  const phase=crop.stage;const cropType=crop.type;let reward='';
  if(isHarvest){const c=CROPS[crop.type];state.harvest[c.id]=(state.harvest[c.id]||0)+1;plot.crop=null;reward=`<div class="timer-block compact-timer">🌾 Harvested 1 ${escapeHTML(c.name)}!</div>`;toast(`Harvested ${c.name}!`);}
- else{crop.stage++;crop.nextDueAt=now()+cropInterval(CROPS[crop.type]);reward=`<div class="timer-block compact-timer">Next: <strong>${ACTIONS[crop.stage]} · ${ACTION_VI[crop.stage]} in ${formatSeconds(cropInterval(CROPS[crop.type]))}</strong></div>`;}
+ else{crop.stage++;crop.nextDueAt=now()+cropInterval(CROPS[crop.type]);}
  save();if(ONLINE)flushOnline();updateHUD();
  const feedback=()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${wordCard(q.word,'neutral')}${reward}`,'','feedback');
  beginTimedAction(isHarvest?'harvest':['water','tend','fertilize'][phase],feedback,q.plotIndex);
 }
 function showHistory(){const hs=state.history;let correct=hs.filter(x=>x.correct).length,accuracy=hs.length?Math.round(correct/hs.length*100):0;const recent=[...hs].reverse().slice(0,80);
- openModal('Learning History',`<div class="stat-strip"><span class="stat-chip">Questions: ${hs.length}</span><span class="stat-chip">Correct: ${correct}</span><span class="stat-chip">Wrong: ${hs.length-correct}</span><span class="stat-chip">Accuracy: ${accuracy}%</span></div><p class="muted">This log includes <strong>every submitted attempt</strong>, including wrong answers and retries. Teachers can view the full history from their private Google Sheets dashboard when online sync is configured.</p><div class="scroll-table"><table class="history-table"><thead><tr><th>Date</th><th>Word</th><th>Task</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody>${recent.length?recent.map(h=>`<tr><td>${escapeHTML(new Date(h.time).toLocaleString())}</td><td><strong>${escapeHTML(h.word)}</strong></td><td>${escapeHTML(h.stage)}</td><td>${escapeHTML(h.answer)}</td><td>${escapeHTML(h.expected)}</td><td class="${h.correct?'result-correct':'result-wrong'}">${h.correct?'✓':'✗'}</td></tr>`).join(''):'<tr><td colspan="6">No answers yet. Grow a carrot to begin!</td></tr>'}</tbody></table></div><div class="button-row">${ONLINE?'<button class="primary-btn" data-do="sync-words">↻ Tải từ mới · Reload words</button><button class="secondary-btn" data-do="sync-save">☁ Save progress</button>':''}<button class="secondary-btn" data-do="house">🏠 House</button></div><p class="fine-print">Only the latest 80 attempts appear here. ${ONLINE?'Your teacher can review your answer history in their private Google Sheet.':'Offline mode stores up to 3,000 attempts locally.'}</p>`,'CURRENT STUDENT • LOCAL HISTORY','history');}
+ openModal('Learning History',`<div class="stat-strip"><span class="stat-chip">Questions: ${hs.length}</span><span class="stat-chip">Correct: ${correct}</span><span class="stat-chip">Wrong: ${hs.length-correct}</span><span class="stat-chip">Accuracy: ${accuracy}%</span></div><p class="muted">This log includes <strong>every submitted attempt</strong>, including wrong answers and retries. Teachers can view the full history from their private Google Sheets dashboard when online sync is configured.</p><div class="scroll-table"><table class="history-table"><thead><tr><th>Date</th><th>Word</th><th>Task</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody>${recent.length?recent.map(h=>`<tr><td>${escapeHTML(new Date(h.time).toLocaleString())}</td><td><strong>${escapeHTML(h.word)}</strong></td><td>${escapeHTML(h.stage)}</td><td>${escapeHTML(h.answer)}</td><td>${escapeHTML(h.expected)}</td><td class="${h.correct?'result-correct':'result-wrong'}">${h.correct?'✓':'✗'}</td></tr>`).join(''):'<tr><td colspan="6">No answers yet. Grow a carrot to begin!</td></tr>'}</tbody></table></div><div class="button-row">${ONLINE?'<button class="primary-btn" data-do="sync-words">↻ Tải từ mới · Reload words</button><button class="secondary-btn" data-do="sync-save">☁ Save progress</button>':''}<button class="secondary-btn" data-do="house">🏠 House</button></div><p class="fine-print">Only the latest 80 attempts appear here. ${ONLINE?'Your teacher can review your answer history in their private Google Sheet.':'Offline mode stores up to 3,000 attempts locally.'}</p>`,ONLINE?'CURRENT STUDENT • ANSWER HISTORY':'CURRENT STUDENT • LOCAL HISTORY','history');}
 function saveDownload(name,content,mime){const blob=new Blob([content],{type:mime});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function csvCell(s){return `"${String(s??'').replace(/"/g,'""')}"`}
 function exportHistory(){const cols=['timestamp','student_id','student_name','source','stage','word','submitted_answer','correct_answer','correct','attempt'];const lines=state.history.map((h,i)=>[new Date(h.time).toISOString(),state.id,state.name,h.source,h.stage,h.word,h.answer,h.expected,h.correct,h.attempt||''].map(csvCell).join(','));saveDownload(`student_${state.id}_answer_history.csv`,[cols.join(','),...lines].join('\r\n'),'text/csv;charset=utf-8');toast('History CSV exported to your device.')}
@@ -1269,7 +1294,7 @@ function exportTemplate(){const rows=[['English word','UK IPA','Part of speech',
 function parseCSV(text){text=text.replace(/^\ufeff/,'');const lines=[];let row=[],cell='',q=false;for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(q&&text[i+1]==='"'){cell+='"';i++}else q=!q;}else if(ch===','&&!q){row.push(cell);cell='';}else if((ch==='\n'||ch==='\r')&&!q){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);cell='';if(row.some(x=>x.trim()))lines.push(row);row=[];}else cell+=ch;}row.push(cell);if(row.some(x=>x.trim()))lines.push(row);return lines;}
 function importCSVFile(e){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{
  const rows=parseCSV(String(reader.result||''));if(!rows.length)throw Error('The file is empty.');let start=/english|từ vựng|word/i.test(rows[0][0]||'')?1:0;const current=JSON.parse(localStorage.getItem(BANK_KEY)||'[]');let added=0,skipped=0;
- for(const line of rows.slice(start)){if(line.length<5){skipped++;continue;}const [english,ipa,pos0,meaning,example]=line.map(x=>x.trim());const pos=pos0.replace(/[().]/g,'').trim().toLowerCase();if(!english||!ipa||!meaning||!['n','v','adj','adv'].includes(pos)||!example){skipped++;continue;}const id='custom_'+slug(english).replace(/[^a-z0-9]+/g,'_')+'_'+pos;if(bank.some(x=>slug(x.english)===slug(english)&&x.pos===pos)){skipped++;continue;}const w={id,english,ipa,pos,meaning,example};current.push(w);bank.push(w);added++;}
+ for(const line of rows.slice(start)){if(line.length<5){skipped++;continue;}const [english,ipa,pos0,meaning,example]=line.map(x=>x.trim());const pos=canonicalPOS(pos0,english);if(!english||!ipa||!meaning||!pos||!example){skipped++;continue;}const legacyPos=pos==='v.phr'?'v':pos==='n/v'?'n':pos.replace(/\W+/g,'');const id='custom_'+slug(english).replace(/[^a-z0-9]+/g,'_')+'_'+legacyPos;if(bank.some(x=>slug(x.english)===slug(english)&&x.pos===pos)){skipped++;continue;}const w={id,english,ipa,pos,meaning,example};current.push(w);bank.push(w);added++;}
  localStorage.setItem(BANK_KEY,JSON.stringify(current));toast(`${added} words imported (${skipped} skipped).`);
  }catch(err){toast('Could not import CSV: '+err.message,true)}};reader.readAsText(file,'UTF-8');}
 
@@ -1378,6 +1403,11 @@ function canPetStand(x,y){
   const [a,b]=fenceEndpoints(f);
   return distToSegment({x,y},a,b)<14;
  })&&!state.decorations.some(d=>Math.hypot(x-d.x,y-d.y)<(DECOR_BY_ID[d.id]?.radius||14)+6);
+}
+function petRouteClear(from,to){
+ const steps=Math.max(1,Math.ceil(Math.hypot(to.x-from.x,to.y-from.y)/5));
+ for(let i=1;i<=steps;i++)if(!canPetStand(from.x+(to.x-from.x)*i/steps,from.y+(to.y-from.y)*i/steps))return false;
+ return !blockedByFences(from,to);
 }
 function nearestPetSpot(x,y,preferredAnchor=null){
  const anchor=validPetPoint(preferredAnchor)?preferredAnchor:{x,y};
@@ -1588,7 +1618,7 @@ function updateCompanions(dt){if(!state)return;for(const pet of state.companions
    const rad=Math.random()*Math.PI*2,dist=25+Math.random()*65;
    const dest={x:pet.x+Math.cos(rad)*dist,y:pet.y+Math.sin(rad)*dist};
    if(canPetStand(dest.x,dest.y)&&sameFenceRegion(pet.fenceHome,dest)&&
-      sameFenceRegion(pet,dest)&&!blockedByFences(pet,dest)){
+      sameFenceRegion(pet,dest)&&petRouteClear(pet,dest)){
     pet.target=dest;pet.dir=petHeading(dest.x-pet.x,dest.y-pet.y,pet.dir);
     pet.walkDistance=0;pet.frame=0;
    }else pet.moveAt=t+600+Math.random()*1200;
@@ -1599,7 +1629,7 @@ function updateCompanions(dt){if(!state)return;for(const pet of state.companions
    if(dist<3){pet.target=null;pet.walkDistance=0;pet.frame=0;pet.moveAt=t+1400+Math.random()*1900;continue;}
    const to={x:pet.x+dx/dist*step,y:pet.y+dy/dist*step};
    if(canPetStand(to.x,to.y)&&sameFenceRegion(pet.fenceHome,to)&&
-      sameFenceRegion(pet,to)&&!blockedByFences(pet,to)){
+      sameFenceRegion(pet,to)&&petRouteClear(pet,to)){
     pet.x=to.x;pet.y=to.y;pet.safePosition={x:to.x,y:to.y};
     pet.walkDistance=(pet.walkDistance||0)+step;pet.frame=Math.floor(pet.walkDistance/8)%4;
    }else{pet.target=null;pet.frame=0;pet.walkDistance=0;pet.moveAt=t+1100+Math.random()*1400;}
@@ -1933,10 +1963,8 @@ function bindEvents(){resize();window.addEventListener('resize',resize);$('stude
  $('modalOverlay').addEventListener('pointerdown',e=>{if(e.target===$('modalOverlay')&&activeModal!=='plant-exposure')closeModal()});
  $('zoomIn').addEventListener('click',()=>setZoom(zoom*1.25));
  $('zoomOut').addEventListener('click',()=>setZoom(zoom/1.25));
- $('zoomFit').addEventListener('click',()=>setZoom(mapFitZoom()));
- $('zoomFollow').addEventListener('click',followPlayer);
  canvas.addEventListener('wheel',e=>{if(!playing)return;e.preventDefault();setZoom(zoom*(e.deltaY<0?1.15:1/1.15))},{passive:false});
- $('inventoryButton').addEventListener('click',showInventory);$('missionsButton').addEventListener('click',showMissions);$('historyButton').addEventListener('click',showHistory);$('devToolsButton').addEventListener('click',showDevTools);
+ $('inventoryButton').addEventListener('click',showInventory);$('missionsButton').addEventListener('click',showMissions);$('devToolsButton').addEventListener('click',showDevTools);
  document.querySelectorAll('[data-menu]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.menu==='decorations')showOwnedDecorations();else if(el.dataset.menu==='seeds')showOwnedSeeds();else if(el.dataset.menu==='collection')showCompanions();}));
  $('placementCancel').addEventListener('click',cancelPlacement);
  const stick=$('movementJoystick');stick.addEventListener('pointerdown',e=>{if(!playing||joystickPointerId!==null)return;e.preventDefault();joystickPointerId=e.pointerId;stick.classList.add('active');stick.setPointerCapture(e.pointerId);moveJoystick(e);});
@@ -1962,7 +1990,7 @@ function bindEvents(){resize();window.addEventListener('resize',resize);$('stude
   if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>13){clearTimeout(worldLongTimer);drag.moved=true;}
   // Keep tap-to-walk, long-press pet/decor interactions, and item placement intact.
   if(drag.moved&&!drag.held&&!placementMode&&$('modalOverlay').classList.contains('hidden')){
-   cameraManual=true;
+   cameraManual=true;cameraManualUntil=performance.now()+2400;
    camera.x=centeredCamera(camera.x-deltaX/zoom,MAP.world.width,viewW/zoom);
    camera.y=centeredCamera(camera.y-deltaY/zoom,MAP.world.height,viewH/zoom);
    drag.lastX=e.clientX;drag.lastY=e.clientY;

@@ -43,7 +43,6 @@
     <nav class="top-buttons" aria-label="Game menus">
       <button class="icon-btn" id="inventoryButton" title="Inventory (I)"><img src="assets/ui/icons/64/icon_inventory.png" alt=""><span>Bag</span></button>
       <button class="icon-btn" id="missionsButton" title="Daily and weekly challenges"><img src="assets/ui/badges/64/badge_daily.png" alt=""><span>Daily/<wbr>Weekly</span></button>
-      <button class="icon-btn" id="historyButton" title="Learning history"><span class="icon-emoji">📖</span><span>Words</span></button>
       <button class="icon-btn dev-menu-btn" id="devToolsButton" title="Teacher Test Controls" type="button"><span class="icon-emoji">🧪</span><span>Test</span></button>
     </nav>
 
@@ -67,8 +66,6 @@
       <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
       <span id="zoomValue" aria-live="polite">100%</span>
       <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
-      <button id="zoomFit" type="button" aria-label="Fit whole map">Fit</button>
-      <button id="zoomFollow" type="button" aria-label="Follow the farmer and recenter map" title="Follow farmer">Follow</button>
     </nav>
     <div class="mobile-controls" aria-label="Touch movement controls">
       <div id="movementJoystick" class="movement-joystick" role="group" aria-label="Drag to move in any direction">
@@ -87,6 +84,7 @@
   </div>
   <input id="recoveryFileInput" type="file" accept=".json,application/json" hidden aria-label="Import offline recovery file">
   <script><?!= include("MapConfig"); ?></script>
+  <script><?!= include("WalkMask"); ?></script>
   <script><?!= include("RecoveryCode"); ?></script>
   <script><?!= include("GameCode"); ?></script>
   <noscript>This game needs JavaScript. Please enable JavaScript in your browser.</noscript>

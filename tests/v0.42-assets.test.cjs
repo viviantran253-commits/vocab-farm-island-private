@@ -29,9 +29,10 @@ test('production UI keeps classroom login and has new map controls', () => {
   assert.doesNotMatch(html, /Log in to continue your saved island|safety-note/);
   assert.doesNotMatch(game, /querySelector\('\.safety-note'\)|Your private 4-digit code/);
   assert.doesNotMatch(game, /No daily purchase limit/);
-  assert.match(html, /id="zoomFollow"/);
+  assert.doesNotMatch(html, /id="zoomFollow"|id="zoomFit"|id="wordsButton"/);
+  assert.match(html, /include\("WalkMask"\)/);
   assert.match(game, /const ONLINE = true;/);
-  assert.match(game, /const BUILD_ID='v0\.45'/);
+  assert.match(game, /const BUILD_ID='v0\.48'/);
   assert.doesNotMatch(server, /STAGING_MODE|STAGING_SHEET_ID/);
   assert.doesNotMatch(html, /Staging Candidate|private test Google Sheet/);
   assert.doesNotMatch(game, /Staging classroom/);

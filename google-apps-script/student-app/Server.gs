@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.47: official student web app.
+/** Vocab Farm Island v0.48: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -83,18 +83,26 @@ function requireSession_(token) {
   return {id,name:String(account.v[1]),account};
 }
 
+function canonicalWordPos_(raw,english){
+ const key=String(raw||'').trim().toLowerCase().replace(/[().\s_-]+/g,'');
+ const labels={n:'n',noun:'n',v:'v',verb:'v',adj:'adj',adjective:'adj',adv:'adv',adverb:'adv',
+  nphr:'n.phr',nounphrase:'n.phr',vphr:'v.phr',verbphrase:'v.phr',phrv:'v.phr',phr:'v.phr',
+  adjphr:'adj.phr',adjectivephrase:'adj.phr',advphr:'adv.phr',adverbphrase:'adv.phr',
+  phrasalverb:'phrasal',phrasal:'phrasal',idiom:'idiom',collocation:'collocation',nv:'n/v'};
+ const pos=labels[key]||null;
+ return String(english||'').trim().toLowerCase()==='focus on'&&pos==='v'?'v.phr':pos;
+}
+
 function readWords_(ss,id) {
   const sh=tab_(ss,VOCAB_PREFIX+id);const rows=sh.getDataRange().getDisplayValues();
   const out=[],taken={};
   for(let i=1;i<rows.length;i++){
     const [en,ipa,pos0,meaning,example]=rows[i].map(x=>String(x).trim());
-    const rawPos=pos0.toLowerCase().replace(/[().\s]/g,'');
-    // Classroom lists also use "phr.v", "phr" and "n/v". Map them to the
-    // game's four question categories without discarding otherwise valid words.
-    const pos=rawPos==='phrv'||rawPos==='phr'?'v':rawPos==='n/v'?'n':rawPos;
-    if(!en||!ipa||!meaning||!example||!['n','v','adj','adv'].includes(pos))continue;
-    const base=en.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_'+pos;
-    const key='sheet_'+id+'_'+base;
+    const pos=canonicalWordPos_(pos0,en);
+    if(!en||!ipa||!meaning||!example||!pos)continue;
+    // Preserve IDs from older saves when a legacy phrase label is displayed correctly.
+    const legacyPos=pos==='v.phr'?'v':pos==='n/v'?'n':pos.replace(/\W+/g,'');
+    const key='sheet_'+id+'_'+en.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_'+legacyPos;
     if(taken[key])continue; taken[key]=true;
     out.push({id:key,english:en,ipa,pos,meaning,example});
   }

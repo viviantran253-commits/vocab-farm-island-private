@@ -1,10 +1,10 @@
-# Vocab Farm Island — classroom game v0.45
+# Vocab Farm Island — classroom game v0.48
 
 ## Play
 
 - **Official classroom link:** https://viviantran253-commits.github.io/vocab-farm-island-private/
-- The GitHub page opens the live Google Apps Script game. Choose a student profile and enter that student's private four-digit passcode. The public demo codes do not work here.
-- The private Google Sheet supplies each student's vocabulary and stores their progress and answer history. New vocabulary appears after signing in again or choosing **Words → Reload words** in the game.
+- The GitHub page opens the live Google Apps Script game. Enter the student number and private four-digit passcode. The public demo codes do not work here.
+- The private Google Sheet supplies each student's vocabulary and stores their progress and answer history. New vocabulary appears after signing in again or choosing **Your Farmhouse → Answer history → Reload words** in the game.
 - **Offline demo:** [demo.html](demo.html) is the older v0.13 local demo. It saves only in that browser and does not use the teacher Sheet.
 
 ## Teacher workflow
@@ -34,3 +34,7 @@ Students type their number and private four-digit passcode on the login page. In
 - `FINAL_SETUP_GOOGLE_SHEETS_GITHUB.md` is a setup guide for a fresh installation. This repository is already connected and deployed.
 
 Existing offline demo progress is not imported into the teacher Sheet. Google Apps Script and Sheets service quotas still apply.
+
+## Vocabulary categories
+
+In each `Vocab_` tab, column C accepts `n`, `v`, `adj`, `adv`, `n. phr.`, `v. phr.`, `adj. phr.`, `adv. phr.`, `phrasal verb`, `idiom`, `collocation`, or `n/v` (or their full English names). Use `v. phr.` for “focus on”; use `phrasal verb` when a verb combines with a particle, such as “give up.” These categories appear in learning cards and questions. Existing word IDs and progress for legacy verb phrases remain intact.
