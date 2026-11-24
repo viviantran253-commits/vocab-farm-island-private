@@ -1,4 +1,4 @@
-/* Vocab Farm Island v0.45: official online classroom game. */
+/* Vocab Farm Island v0.46: official online classroom game. */
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
@@ -321,6 +321,32 @@ function serverCall(method,...args){return new Promise((resolve,reject)=>{
 });}
 function makeHistoryId(){return 'ev_'+now()+'_'+Math.random().toString(36).slice(2,12);}
 let onlineSaveTimer=null;
+function onlineSnapshot(){
+ const copy=JSON.parse(JSON.stringify(state));
+ copy.history=copy.history.slice(-40);copy.sales=(copy.sales||[]).slice(-35);copy.lastWords=(copy.lastWords||[]).slice(-20);
+ return JSON.stringify(copy);
+}
+async function combinedMagicCall(method,args){
+ clearTimeout(onlineSaveTimer);
+ // A dispatched save cannot be cancelled; include all later changes in this request.
+ for(let tries=0;onlineBusy&&tries<50;tries++)await delay(100);
+ if(onlineBusy)throw Error('Progress is still syncing. Try again.');
+ const events=onlinePendingEvents.slice(0,50),revision=onlineRevision,snapshot=onlineSnapshot();
+ const clientAtRequest={gold:state.gold,specialSeeds:state.seeds.special||0};
+ onlineDirty=false;
+ const started=performance.now();
+ try{
+  const result=await serverCall(method,onlineToken,...args,revision,snapshot,events);
+  if(result?.conflict)throw Error('Progress changed on another device. Log in again before continuing.');
+  if(!result?.ok)throw Error('The action was not confirmed.');
+  onlineRevision=result.revision;
+  onlinePendingEvents=onlinePendingEvents.filter(x=>!events.includes(x));
+  if(onlinePendingEvents.length)onlineDirty=true;
+  onlineSaveAt=now();
+  console.info('[Vocab Farm] '+method+' round trip: '+Math.round(performance.now()-started)+' ms',result.timing||{});
+  return {...result,clientAtRequest};
+ }catch(err){onlineDirty=true;throw err;}
+}
 function queueOnlineSave(){if(!ONLINE||!onlineToken)return;onlineDirty=true;setSaveState('pending','● Saving to Google Sheets…');clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},1600);}
 async function flushOnline(){
  if(!ONLINE||!onlineToken||!state)return false;
@@ -709,7 +735,7 @@ function showPlantVocabulary(word,nextLabel){
 }
 function showShop(){const content=`<div class="shop-intro">${img('assets/ui/shop/shopkeeper/shopkeeper_portrait_128.png')}<div><div class="shop-gold">${goldIconHTML()} <strong>${state.gold} gold</strong></div></div></div>
  <div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><span class="price">${goldIconHTML()} ${c.seed}</span><span class="subtext">${c.mins} min · Sell ${c.sale}</span>${state.level<c.level?`<span class="tag danger">Level ${c.level}</span>`:`<button class="primary-btn" data-do="buy" data-crop="${c.id}" ${state.gold<c.seed?'disabled':''}>Buy</button>`}<small>Owned: ${state.seeds[c.id]||0}</small></div>`).join('')}</div>
- <h3 class="section-heading">Magical companions & fences</h3><div class="card-grid"><div class="item-card">${img(specialSeedShopArt)}<strong>Special Seed</strong><span class="price">${goldIconHTML()} ${SPECIAL_SEED.seed}</span><small>Unlock Lv 5</small><small>Owned: ${(state.seeds.special||0)+(pendingSpecialPurchase?1:0)}${pendingSpecialPurchase?' (1 confirming)':''}</small><button class="primary-btn" data-do="buy-special" ${canBuySpecial()&&!specialServerBusy?'':'disabled'}>${pendingSpecialPurchase?'Confirming…':state.level<5?'Unlock at Lv 5':'Buy 1'}</button></div><div class="item-card">${img('assets/fences/fence_horizontal.png')}<strong>Wooden Fence</strong><span class="price">${goldIconHTML()} ${FENCE_PRICE}</span><small>Rotate: horizontal / vertical</small><small>Owned: ${state.fenceStock}</small><button class="primary-btn" data-do="buy-fence" ${state.gold<FENCE_PRICE?'disabled':''}>Buy 1</button></div></div>
+ <h3 class="section-heading">Magical companions & fences</h3><div class="card-grid"><div class="item-card">${img(specialSeedShopArt)}<strong>Special Seed</strong><span class="price">${goldIconHTML()} ${SPECIAL_SEED.seed}</span><small>Unlock Lv 5</small><small>Owned: ${state.seeds.special||0}${pendingSpecialPurchase?' · purchase pending':''}</small><button class="primary-btn" data-do="buy-special" ${canBuySpecial()&&!specialServerBusy?'':'disabled'}>${pendingSpecialPurchase?'Confirming…':state.level<5?'Unlock at Lv 5':'Buy 1'}</button></div><div class="item-card">${img('assets/fences/fence_horizontal.png')}<strong>Wooden Fence</strong><span class="price">${goldIconHTML()} ${FENCE_PRICE}</span><small>Rotate: horizontal / vertical</small><small>Owned: ${state.fenceStock}</small><button class="primary-btn" data-do="buy-fence" ${state.gold<FENCE_PRICE?'disabled':''}>Buy 1</button></div></div>
  <div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decorations & packs</button><button class="secondary-btn" data-do="inventory">Inventory</button>${canRescue()?'<button class="primary-btn" data-do="rescue">Free carrot seed</button>':''}</div>`;
  openModal('Seed Shop',content,'','shop');}
 function showDecorationShop(){
@@ -738,14 +764,9 @@ async function buySpecialSeed(){
   specialServerBusy=true;
   pendingSpecialPurchase=true;showShop();
   try{
-   if(!(await syncBeforeMagicTransaction()))return;
-   const goldAtRequest=state.gold,seedsAtRequest=state.seeds.special||0;
-   const result=await serverCall('studentSpecialBuy',onlineToken,onlineRevision);
-   if(result?.conflict){onlineDirty=true;toast('Progress changed on another device. Log in again before buying.',true);return;}
-   if(!result?.ok)throw Error('Purchase was not confirmed.');
-   onlineRevision=result.revision;
-   state.gold=result.gold+(state.gold-goldAtRequest);
-   state.seeds.special=result.specialSeeds+((state.seeds.special||0)-seedsAtRequest);
+   const result=await combinedMagicCall('studentSpecialBuy',[]);
+   state.gold=result.gold+(state.gold-result.clientAtRequest.gold);
+   state.seeds.special=result.specialSeeds+((state.seeds.special||0)-result.clientAtRequest.specialSeeds);
    state.specialSeedLastPurchase=result.day;
    updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Special Seed saved to Google Sheets');toast('Purchased 1 Special Seed!');
   }catch(err){toast('Special Seed purchase not confirmed: '+(err?.message||err),true);}
@@ -859,7 +880,7 @@ function sellFence(){
  save();updateHUD();showOwnedDecorations();toast(`Wooden Fence sold for ${reward} gold.`);
 }
 function showInventory(){const section=(kind,label,list)=>`<h3 class="section-heading">${label}</h3><div class="inventory-grid">${list.map(c=>`<div class="inventory-cell">${img(cropIcon(c.id,kind==='seed'?'seed':'harvested'))}<span>${escapeHTML(c.name)}</span><small>× ${kind==='seed'?(state.seeds[c.id]||0):(state.harvest[c.id]||0)}</small></div>`).join('')}</div>`;
- openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${(state.seeds.special||0)+(pendingSpecialPurchase?1:0)}${pendingSpecialPurchase?' · 1 confirming':''}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,'INVENTORY • SAVED IN THIS BROWSER','inventory');}
+ openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${state.seeds.special||0}${pendingSpecialPurchase?' · purchase pending':''}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,'INVENTORY • SAVED IN THIS BROWSER','inventory');}
 // v0.24: Bottom shortcuts show purchased items, never the shops.
 // Keep these menus separate from the full Bag, which includes harvested crops.
 function showOwnedDecorations(){
@@ -879,9 +900,9 @@ function showOwnedSeeds(){
  const hasSpecial=(state.seeds.special||0)>0||pendingSpecialPurchase;
  const available=state.plots.filter(p=>p.unlocked&&!p.crop).length;
  const cards=items.map(c=>`<article class="owned-asset-card">${img(cropIcon(c.id,'seed'),'owned-asset-image',c.name)}<strong>${escapeHTML(c.name)}</strong><span class="owned-count">Owned ×${state.seeds[c.id]}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="${c.id}" ${available?'':'disabled'}>Choose plot</button></article>`).join('');
- const special=hasSpecial?`<article class="owned-asset-card">${img(specialSeedArt,'owned-asset-image','Special Seed')}<strong>Special Seed</strong><span class="owned-count">Owned ×${(state.seeds.special||0)+(pendingSpecialPurchase?1:0)}${pendingSpecialPurchase?' · 1 confirming':''}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="special" ${available&&(state.seeds.special||0)>0?'':'disabled'}>Choose plot</button></article>`:'';
+ const special=hasSpecial?`<article class="owned-asset-card">${img(specialSeedArt,'owned-asset-image','Special Seed')}<strong>Special Seed</strong><span class="owned-count">Owned ×${state.seeds.special||0}${pendingSpecialPurchase?' · purchase pending':''}</span><button class="primary-btn" type="button" data-do="seed-to-plot" data-crop="special" ${available&&(state.seeds.special||0)>0?'':'disabled'}>Choose plot</button></article>`:'';
 
- const content=`<div class="stat-strip"><span class="stat-chip">🌱 ${items.reduce((n,c)=>n+(state.seeds[c.id]||0),0)+(state.seeds.special||0)+(pendingSpecialPurchase?1:0)} seeds shown${pendingSpecialPurchase?' (1 confirming)':''}</span><span class="stat-chip">🟫 ${available} empty plots</span></div>
+ const content=`<div class="stat-strip"><span class="stat-chip">🌱 ${items.reduce((n,c)=>n+(state.seeds[c.id]||0),0)+(state.seeds.special||0)} seeds owned${pendingSpecialPurchase?' · purchase pending':''}</span><span class="stat-chip">🟫 ${available} empty plots</span></div>
   <div class="owned-asset-grid">${cards}${special}</div>${!items.length&&!hasSpecial?'<div class="owned-empty">No seeds in your inventory yet.</div>':''}`;
  openModal('My Seeds',content,'OWNED SEEDS · NOT THE SHOP','owned-seeds');
 }
@@ -933,14 +954,11 @@ async function finishSpecialReveal(index,questionContext=null,actionDone=null){
  if(!crop||crop.type!=='special'||crop.stage!==0||crop.pendingReveal!==true)return;
  specialServerBusy=true;
  try{
-  if(!(await syncBeforeMagicTransaction())){if(actionDone)await actionDone;showSpecialPlot(index);return;}
-  const result=await serverCall('studentSpecialReveal',onlineToken,index,onlineRevision);
-  if(result?.conflict){onlineDirty=true;if(actionDone)await actionDone;toast('Progress changed on another device. Please log in again.',true);showSpecialPlot(index);return;}
+  const result=await combinedMagicCall('studentSpecialReveal',[index]);
   if(!result?.ok||!result.crop||!result.crop.characterId)throw Error('No confirmed reveal received.');
-  onlineRevision=result.revision;
   Object.assign(crop,result.crop);delete crop.pendingReveal;
   const pxy=CROP_PLOT(index);spawnEffect('growth_transformation',pxy.x+pxy.width/2,pxy.y+40);
-  save();updateHUD();
+  updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Saved to Google Sheets');
   const word=questionContext?.word;
   const message=`${petById(crop).name} (${companionStars(crop.rarity)}) revealed!`;
   const feedback=()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${word?wordCard(word,'neutral'):''}<div class="timer-block">${escapeHTML(message)}</div>`,'','feedback');
@@ -1755,6 +1773,7 @@ async function deliberatelyStartFresh(){
 // -------------------- Events, persistence, and frame loop --------------------
 function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(speaker){speakVocabularyWord(speaker.dataset.pronounce);return;}const option=e.target.closest('[data-choice]');if(option){chooseAnswer(Number(option.dataset.choice));return;}const btn=e.target.closest('[data-do]');if(!btn||btn.disabled)return;const action=btn.dataset.do,id=btn.dataset.crop,index=Number(btn.dataset.index);
  if(ONLINE&&((action==='dev-tools'&&!onlineTestMode)||action.startsWith('dev-')||(action.startsWith('test-')&&!onlineTestMode)||action.startsWith('recovery')||action==='export-save'||action==='export-template')){toast('This tool is unavailable for this profile.',true);return;}
+ if(ONLINE&&specialServerBusy&&!['close','shop','inventory','owned-seeds','companions','companion-detail'].includes(action)){toast('Finish the pending game action first.',true);return;}
  switch(action){
  case 'close':closeModal();break;
  case 'dev-tools':showDevTools();break;

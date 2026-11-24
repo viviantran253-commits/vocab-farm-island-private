@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.45: official student web app.
+/** Vocab Farm Island v0.46: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -172,15 +172,10 @@ function verifyProfile_(profile,id){
  if(JSON.stringify(profile).length>49000)throw Error('Saved state is too large. Please contact the teacher.');
  return profile;
 }
-function studentSave(session,profileJson,events,expectedRevision){
- const user=requireSession_(session),id=user.id;
+function prepareStudentSave_(ss,user,p,profileJson,events){
+ const id=user.id;
  if(typeof profileJson!=='string'||profileJson.length>49000)throw Error('Save is too large.');
  const proposed=verifyProfile_(JSON.parse(profileJson),id);proposed.name=user.name;
- const ss=data_(),lock=LockService.getScriptLock();lock.waitLock(20000);
- try{
-  requireSession_(session);
-  const p=readProgress_(ss,id,user.name);
-  if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
   if(id!==TEACHER_TEST_ID&&Number(proposed.settings?.testGrowthSeconds||0)!==0)throw Error('Test growth settings are unavailable for student profiles.');
   // These fields may only be changed by the two authenticated server methods.
   if(String(proposed.specialSeedLastPurchase||'')!==String(p.profile.specialSeedLastPurchase||''))throw Error('Special Seed purchase must be confirmed by the server.');
@@ -204,10 +199,11 @@ function studentSave(session,profileJson,events,expectedRevision){
    if(matching<0)throw Error('No ready, harvested Special Seed supports this companion.');
    availableHarvests.splice(matching,1); // one harvested plot cannot mint multiple pets
   }
-  const history=tab_(ss,HISTORY_TAB),seen=new Set(p.seen||[]);
-  const dict={};for(const w of readWords_(ss,id))dict[w.id]=w;
+  const seen=new Set(p.seen||[]);
+  const submitted=Array.isArray(events)?events.slice(0,75):[];
+  const dict={};if(submitted.length)for(const w of readWords_(ss,id))dict[w.id]=w;
   const toSave=[];
-  for(const e of (Array.isArray(events)?events:[]).slice(0,75)){
+  for(const e of submitted){
    if(!e||!/^ev_[\w-]{8,}$/.test(String(e.eventId||''))||seen.has(e.eventId))continue;
    seen.add(e.eventId);
    // Verify the submitted answer against the teacher's current word sheet.
@@ -222,12 +218,23 @@ function studentSave(session,profileJson,events,expectedRevision){
       String(expected).slice(0,200),result,
       Math.max(1,Math.min(100,Number(e.attempt)||1))]);
   }
-  if(toSave.length)history.getRange(history.getLastRow()+1,1,toSave.length,11).setValues(toSave);
-  const rec=[id,p.revision+1,JSON.stringify(proposed),new Date(),JSON.stringify(Array.from(seen).slice(-300))];
+  return {profile:proposed,seen:Array.from(seen).slice(-300),toSave};
+}
+function commitStudentProgress_(ss,user,p,prepared){
+  if(prepared.toSave.length){const history=tab_(ss,HISTORY_TAB);history.getRange(history.getLastRow()+1,1,prepared.toSave.length,11).setValues(prepared.toSave);}
+  const rec=[user.id,p.revision+1,JSON.stringify(prepared.profile),new Date(),JSON.stringify(prepared.seen)];
   const progressSheet=tab_(ss,PROGRESS_TAB);
   if(p.row)progressSheet.getRange(p.row,1,1,5).setValues([rec]);
   else progressSheet.appendRow(rec);
-  return {ok:true,revision:p.revision+1,logged:toSave.length};
+  return {ok:true,revision:p.revision+1,logged:prepared.toSave.length};
+}
+function studentSave(session,profileJson,events,expectedRevision){
+ const ss=data_(),lock=LockService.getScriptLock();lock.waitLock(20000);
+ try{
+  const user=requireSession_(session);
+  const p=readProgress_(ss,user.id,user.name);
+  if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
+  return commitStudentProgress_(ss,user,p,prepareStudentSave_(ss,user,p,profileJson,events));
  }finally{lock.releaseLock();}
 }
 
@@ -283,14 +290,20 @@ function studentTestAction(session,action,value,expectedRevision){
   return {ok:true,revision,profile};
  }finally{lock.releaseLock();}
 }
-function studentSpecialBuy(session,expectedRevision){
- const user=requireSession_(session),ss=data_();
+function studentSpecialBuy(session,expectedRevision,profileJson,events){
+ const started=Date.now();
+ const ss=data_();
+ const openMs=Date.now()-started;
  const lock=LockService.getScriptLock();lock.waitLock(20000);
  try{
-  requireSession_(session);
+  const user=requireSession_(session);
+  const lockAndSessionMs=Date.now()-started-openMs;
   const p=readProgress_(ss,user.id,user.name);
+  const readMs=Date.now()-started-openMs-lockAndSessionMs;
   if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
-  const day=magicDay_(),profile=p.profile;
+  const prepared=typeof profileJson==='string'?prepareStudentSave_(ss,user,p,profileJson,events):null;
+  const prepareMs=Date.now()-started-openMs-lockAndSessionMs-readMs;
+  const day=magicDay_(),profile=prepared?prepared.profile:p.profile;
   if(profile.version!==2||Number(profile.level)<5||Number(profile.gold)<MAGIC_COST)throw Error('Level 5 and 300 gold are required.');
   const ledger=magicLedger_(ss);
   // Purchases are no longer limited to one per day. Revision and lock checks still apply.
@@ -298,32 +311,46 @@ function studentSpecialBuy(session,expectedRevision){
   if(!profile.seeds||typeof profile.seeds!=='object')profile.seeds={};
   profile.seeds.special=(Number(profile.seeds.special)||0)+1;
   profile.specialSeedLastPurchase=day;profile.savedAt=Date.now();
-  const rev=writeMagicProgress_(ss,p,user.id,profile);
-  ledger.appendRow([new Date(),user.id,'purchase',day,'','',0,rev]);
-  return {ok:true,revision:rev,day,gold:profile.gold,specialSeeds:profile.seeds.special};
+  const saved=prepared?commitStudentProgress_(ss,user,p,prepared):null;
+  const rev=saved?saved.revision:writeMagicProgress_(ss,p,user.id,profile);
+  const commitMs=Date.now()-started-openMs-lockAndSessionMs-readMs-prepareMs;
+  try{ledger.appendRow([new Date(),user.id,'purchase',day,'','',0,rev]);}
+  catch(error){console.error('Special Seed purchase saved at revision '+rev+'; ledger append failed: '+error);}
+  return {ok:true,revision:rev,day,gold:profile.gold,specialSeeds:profile.seeds.special,logged:saved?saved.logged:0,timing:{openMs,lockAndSessionMs,readMs,prepareMs,commitMs,totalMs:Date.now()-started}};
  }finally{lock.releaseLock();}
 }
-function studentSpecialReveal(session,plotIndex,expectedRevision){
- const user=requireSession_(session),ss=data_(),idx=Number(plotIndex);
+function studentSpecialReveal(session,plotIndex,expectedRevision,profileJson,events){
+ const started=Date.now();
+ const ss=data_(),idx=Number(plotIndex);
+ const openMs=Date.now()-started;
  if(!Number.isInteger(idx)||idx<0||idx>9)throw Error('Invalid planting plot.');
  const lock=LockService.getScriptLock();lock.waitLock(20000);
  try{
-  requireSession_(session);
+  const user=requireSession_(session);
+  const lockAndSessionMs=Date.now()-started-openMs;
   const p=readProgress_(ss,user.id,user.name);
+  const readMs=Date.now()-started-openMs-lockAndSessionMs;
   if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
-  const crop=p.profile.plots?.[idx]?.crop;
+  const prepared=typeof profileJson==='string'?prepareStudentSave_(ss,user,p,profileJson,events):null;
+  const prepareMs=Date.now()-started-openMs-lockAndSessionMs-readMs;
+  const profile=prepared?prepared.profile:p.profile;
+  const crop=profile.plots?.[idx]?.crop;
   if(!crop||crop.type!=='special')throw Error('This plot does not contain a Special Seed.');
   if(crop.stage===1&&crop.characterId&&[1,2,3].includes(Number(crop.rarity)))return {ok:true,revision:p.revision,crop};
   if(crop.stage!==0||crop.pendingReveal!==true)throw Error('Complete the Water question before revealing a character.');
   const chance=Math.floor(Math.random()*100);
   crop.rarity=chance<5?3:chance<30?2:1;
   crop.characterId=MAGIC_CHARACTERS[Math.floor(Math.random()*MAGIC_CHARACTERS.length)];
-  const testSeconds=user.id===TEACHER_TEST_ID?Number(p.profile.settings?.testGrowthSeconds)||0:0;
+  const testSeconds=user.id===TEACHER_TEST_ID?Number(profile.settings?.testGrowthSeconds)||0:0;
   crop.stage=1;crop.retryAfter=0;crop.wrong=0;crop.nextDueAt=Date.now()+(testSeconds>=1&&testSeconds<=120?testSeconds:60)*1000;
   delete crop.pendingReveal;
-  p.profile.savedAt=Date.now();
-  const rev=writeMagicProgress_(ss,p,user.id,p.profile);
-  magicLedger_(ss).appendRow([new Date(),user.id,'reveal',magicDay_(),idx+1,crop.characterId,crop.rarity,rev]);
-  return {ok:true,revision:rev,crop};
+  profile.savedAt=Date.now();
+  const ledger=magicLedger_(ss);
+  const saved=prepared?commitStudentProgress_(ss,user,p,prepared):null;
+  const rev=saved?saved.revision:writeMagicProgress_(ss,p,user.id,profile);
+  const commitMs=Date.now()-started-openMs-lockAndSessionMs-readMs-prepareMs;
+  try{ledger.appendRow([new Date(),user.id,'reveal',magicDay_(),idx+1,crop.characterId,crop.rarity,rev]);}
+  catch(error){console.error('Special Seed reveal saved at revision '+rev+'; ledger append failed: '+error);}
+  return {ok:true,revision:rev,crop,logged:saved?saved.logged:0,timing:{openMs,lockAndSessionMs,readMs,prepareMs,commitMs,totalMs:Date.now()-started}};
  }finally{lock.releaseLock();}
 }
