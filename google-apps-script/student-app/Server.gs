@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.46: official student web app.
+/** Vocab Farm Island v0.47: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).

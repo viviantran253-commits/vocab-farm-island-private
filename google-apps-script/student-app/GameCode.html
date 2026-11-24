@@ -1,4 +1,4 @@
-/* Vocab Farm Island v0.46: official online classroom game. */
+/* Vocab Farm Island v0.47: official online classroom game. */
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
@@ -247,6 +247,7 @@ let camera={x:0,y:0};
 let cameraManual=false; // User-dragged view; game positions and student saves are unchanged.
 let zoom=.9,zoomPreference=null,viewW=window.innerWidth,viewH=window.innerHeight,dpr=1;
 let keys=new Set();let touchDirs=new Set();let path=[];let autoAction=null;
+let joystickVector={x:0,y:0},joystickPointerId=null;
 let lastTime=0,uiLast=0,saveLast=0;
 let debugPath=false;
 let visitorMessage='';
@@ -386,7 +387,7 @@ const ACTION_ENTER_MS = 240;
 const ACTION_EXIT_MS = 300;
 function beginTimedAction(kind,onComplete,plotIndex=null){
  if(actionMotion)return;
- closeModal();player.moving=false;path=[];autoAction=null;keys.clear();touchDirs.clear();
+ closeModal();player.moving=false;path=[];autoAction=null;keys.clear();touchDirs.clear();resetJoystick();
  const text=({plant:'Planting · Đang gieo hạt',water:'Watering · Đang tưới cây',tend:'Tending · Đang chăm sóc',fertilize:'Fertilizing · Đang bón phân',give_milk:'Giving milk · Cho uống sữa',feed_meal:'Feeding a meal · Cho ăn',harvest:'Harvesting · Đang thu hoạch'})[kind]||kind;
  const plot=plotIndex===null?null:CROP_PLOT(plotIndex);
  const center=plot?{x:plot.x+plot.width/2,y:plot.y+plot.height/2+7}:{x:player.x,y:player.y};
@@ -566,6 +567,7 @@ function pathfind(start,end){const dest=nearestValid(end);const cols=Math.ceil(M
 function lineClear(a,b){const steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/12);for(let i=1;i<steps;i++){const p={x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps};if(!canPlayerStand(p.x,p.y))return false;}return true}
 function compressPath(points){if(points.length<2)return points;const out=[points[0]];let from=0;while(from<points.length-1){let until=from+1;for(let j=from+2;j<points.length;j++){if(lineClear(points[from],points[j]))until=j;else break;}out.push(points[until]);from=until;}return out.slice(1)}
 function goTo(pos,onArrival){if(!playing)return;const target=nearestValid(pos);const start={x:player.x,y:player.y};let route=null;
+ if(Math.hypot(start.x-target.x,start.y-target.y)<38){path=[];autoAction=null;if(onArrival)onArrival();return true;}
  // Guide travel across the wooden bridge instead of diagonally stepping onto water.
  const mainToShop=start.x<1440&&target.x>1550;
  const shopToMain=start.x>1550&&target.x<1440;
@@ -598,15 +600,15 @@ function canvasTap(e){if(!playing||!$('modalOverlay').classList.contains('hidden
  for(const b of MAP.layers.buildings){if(x>b.x-50&&x<b.x+b.width+50&&y>b.y-30&&y<b.y+b.height+40){routeTo(b.id);return;}}
  const target=nearestValid({x,y});goTo(target,null);
 }
-function updateMovement(dt){if(actionMotion)return;let vx=0,vy=0;const dirs=new Set([...keys,...touchDirs]);if(dirs.has('ArrowUp')||dirs.has('KeyW')||dirs.has('up'))vy--;if(dirs.has('ArrowDown')||dirs.has('KeyS')||dirs.has('down'))vy++;
+function updateMovement(dt){if(actionMotion)return;let vx=joystickVector.x,vy=joystickVector.y;const dirs=new Set([...keys,...touchDirs]);if(dirs.has('ArrowUp')||dirs.has('KeyW')||dirs.has('up'))vy--;if(dirs.has('ArrowDown')||dirs.has('KeyS')||dirs.has('down'))vy++;
  if(dirs.has('ArrowLeft')||dirs.has('KeyA')||dirs.has('left'))vx--;if(dirs.has('ArrowRight')||dirs.has('KeyD')||dirs.has('right'))vx++;
- let speed=390;if(vx||vy){path=[];autoAction=null;const len=Math.hypot(vx,vy);vx/=len;vy/=len;}
+ let speed=390;if(vx||vy){path=[];autoAction=null;const len=Math.hypot(vx,vy);if(len>1){vx/=len;vy/=len;}}
  else if(path.length){const target=path[0],dx=target.x-player.x,dy=target.y-player.y,dist=Math.hypot(dx,dy);
  if(dist<Math.max(10,dt*630)){player.x=target.x;player.y=target.y;path.shift();if(!path.length&&autoAction){const action=autoAction;autoAction=null;action();} }
  else{vx=dx/dist;vy=dy/dist;speed=630;}}
  player.moving=!!(vx||vy);
  // Directional controls deliberately return the camera to its familiar follow mode.
- if(vx||vy){const manuallySteered=[...keys,...touchDirs].some(k=>['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','up','down','left','right'].includes(k));if(manuallySteered)cameraManual=false;}
+ if(vx||vy){const manuallySteered=joystickVector.x||joystickVector.y||[...keys,...touchDirs].some(k=>['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','up','down','left','right'].includes(k));if(manuallySteered)cameraManual=false;}
  if(player.moving){if(Math.abs(vx)>Math.abs(vy))player.dir=vx>0?'right':'left';else player.dir=vy>0?'down':'up';const nx=player.x+vx*speed*dt,ny=player.y+vy*speed*dt;
  if(canPlayerStand(nx,ny)){player.x=nx;player.y=ny;}else{if(canPlayerStand(nx,player.y))player.x=nx;else if(canPlayerStand(player.x,ny))player.y=ny;else if(path.length){path=[];autoAction=null;}}player.animMs+=dt*1000;player.frame=Math.floor(player.animMs/130)%4;}
  else{player.animMs=0;player.frame=0;}
@@ -676,7 +678,7 @@ function drawLocationPin(zone,label){
 }
 function updateHUD(){if(!state)return;$('hudName').textContent=state.name;$('hudLevel').textContent='Lv '+state.level;$('hudRank').textContent=rankForLevel(state.level).name+' · '+rankForLevel(state.level).vi;$('hudGold').textContent=state.gold;
  $('hudXPLabel').textContent=`${state.xp} / ${xpNeed(state.level)}`;$('hudXPBar').style.width=(100*state.xp/xpNeed(state.level))+'%';
- $('areaName').textContent=player.x>1515?'Seed Shop Island':'Main Farm Island';const near=nearbyTarget();$('actionButton').textContent=near?'OPEN':'ACT';}
+ $('areaName').textContent=player.x>1515?'Seed Shop Island':'Main Farm Island';}
 function toast(msg,bad=false){const el=document.createElement('div');el.className='toast'+(bad?' bad':'');el.textContent=msg;$('toastStack').append(el);setTimeout(()=>el.remove(),4100)}
 
 // --------------------------- Interface ---------------------------
@@ -685,7 +687,7 @@ function openModal(title,html,kicker='VOCAB FARM ISLAND',id='generic'){
  const bodyScroll=preserveScroll?$('modalBody').scrollTop:0;
  const panelScroll=preserveScroll?$('modalPanel').scrollTop:0;
  activeModal=id;$('modalPanel').dataset.mode=id;$('modalPanel').dataset.ready='false';$('modalTitle').textContent=title;$('modalEyebrow').textContent=kicker;$('modalBody').innerHTML=html;
- $('modalOverlay').classList.remove('hidden');$('modalPanel').scrollTop=preserveScroll?panelScroll:0;$('modalBody').scrollTop=preserveScroll?bodyScroll:0;keys.clear();touchDirs.clear();path=[];autoAction=null;
+ $('modalOverlay').classList.remove('hidden');$('modalPanel').scrollTop=preserveScroll?panelScroll:0;$('modalBody').scrollTop=preserveScroll?bodyScroll:0;keys.clear();touchDirs.clear();resetJoystick();path=[];autoAction=null;
  if(id==='plant-exposure'){$('modalPanel').focus({preventScroll:true});}else{$('modalClose').focus({preventScroll:true});}
 }
 function closeModal(){if(activeModal==='plant-exposure'&&now()<plantReadUntil)return;
@@ -1667,7 +1669,11 @@ function handleWorldLongPress(p){const pi=petAt(p);if(pi>=0){beginPlacement({kin
 }
 function handleWorldTap(e){if(!playing||!$('modalOverlay').classList.contains('hidden'))return;
  const p=worldPoint(e);if(placementMode){finalizePlacement(p);return;}
- const pi=petAt(p);if(pi>=0){handlePetTap(pi);return;}
+ const pi=petAt(p);if(pi>=0){const pet=state.companions[pi];if(!pet)return;
+  if(Math.hypot(player.x-pet.x,player.y-pet.y)>105)goTo({x:pet.x,y:pet.y+42},()=>handlePetTap(pi));
+  else handlePetTap(pi);return;}
+ const di=decorationAt(p);if(di>=0){const d=state.decorations[di];if(d)goTo({x:d.x,y:d.y+34},()=>showDecorationTools(di));return;}
+ const fi=fenceAt(p);if(fi>=0){const f=state.fences[fi];if(f){const [a,b]=fenceEndpoints(f);goTo({x:(a.x+b.x)/2,y:(a.y+b.y)/2+32},()=>showFenceTools(fi));}return;}
  canvasTap(e);
 }
 
@@ -1868,7 +1874,7 @@ function frame(t){if(!playing)return;if(actionMotion)advanceFarmAction(t);const 
 async function reloadOnlineWords(){if(!ONLINE||!onlineToken)return;
  try{const info=await serverCall('studentWords',onlineToken);bank=info.words||[];if(info.name){state.name=info.name;updateHUD();}toast(`Vocabulary updated: ${bank.length} words.`);showHistory();}
  catch(e){toast('Could not load words: '+e.message,true);}}
-function launchPlayer(slot){cameraManual=false;ensureCompanionState();clearPendingPetTap();setPlacementMode(null);petSpeech=null;worldPointerDown=null;clearTimeout(worldLongTimer);player={x:state.position?.x||880,y:state.position?.y||495,dir:'down',moving:false,frame:0,animMs:0};
+function launchPlayer(slot){cameraManual=false;ensureCompanionState();clearPendingPetTap();setPlacementMode(null);petSpeech=null;worldPointerDown=null;clearTimeout(worldLongTimer);resetJoystick();player={x:state.position?.x||880,y:state.position?.y||495,dir:'down',moving:false,frame:0,animMs:0};
  if(!canStand(player.x,player.y)){const p=nearestValid({x:880,y:495});player.x=p.x;player.y=p.y;}
  initOrders();checkBadges();$('loginScreen').classList.add('hidden');$('gameShell').classList.remove('hidden');syncDaily();resize();camera.x=centeredCamera(player.x-viewW/(2*zoom),MAP.world.width,viewW/zoom);camera.y=centeredCamera(player.y-viewH/(2*zoom),MAP.world.height,viewH/zoom);
  preload();updateHUD();playing=true;lastTime=performance.now();requestAnimationFrame(frame);toast(`Welcome, ${state.name}!`);$('gameCanvas').focus();}
@@ -1911,6 +1917,16 @@ async function beginGame(){let slot;const loginId=$('studentSelect').value.trim(
  }catch(e){$('loginError').textContent=e?.message||'Login failed. Try again.';}
  finally{$('playButton').disabled=false;}
 }
+function resetJoystick(){joystickVector={x:0,y:0};joystickPointerId=null;const stick=$('movementJoystick');if(stick){stick.classList.remove('active');stick.style.setProperty('--stick-x','0px');stick.style.setProperty('--stick-y','0px');}}
+function moveJoystick(e){const stick=$('movementJoystick');if(!stick||e.pointerId!==joystickPointerId)return;
+ const box=stick.getBoundingClientRect(),radius=box.width*.34;
+ const dx=e.clientX-(box.left+box.width/2),dy=e.clientY-(box.top+box.height/2),distance=Math.hypot(dx,dy),ratio=Math.min(1,distance/radius);
+ const scale=distance?Math.min(1,radius/distance):0;
+ stick.style.setProperty('--stick-x',Math.round(dx*scale)+'px');stick.style.setProperty('--stick-y',Math.round(dy*scale)+'px');
+ const strength=ratio<.12?0:(ratio-.12)/.88;
+ joystickVector={x:distance?dx/distance*strength:0,y:distance?dy/distance*strength:0};
+ if(strength){path=[];autoAction=null;cameraManual=false;}
+}
 function bindEvents(){resize();window.addEventListener('resize',resize);$('studentSelect').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);const demo=$('demoPin');if(!ONLINE&&demo)demo.textContent=String(Number(e.target.value)||1).padStart(4,'0');$('loginError').textContent='';});
  $('playButton').addEventListener('click',beginGame);$('recoverLoginButton').addEventListener('click',()=>{try{showRecovery(recoverySlot());}catch(e){$('loginError').textContent=e.message}});$('recoveryFileInput').addEventListener('change',handleRecoveryFile);$('updateLater').addEventListener('click',hideUpdateNotice);$('updateBackup').addEventListener('click',()=>{hideUpdateNotice();showRecovery();});$('passcode').addEventListener('keydown',e=>{if(e.key==='Enter')beginGame()});$('modalBody').addEventListener('click',dispatchClick);
  $('modalClose').addEventListener('click',closeModal);
@@ -1922,7 +1938,10 @@ function bindEvents(){resize();window.addEventListener('resize',resize);$('stude
  canvas.addEventListener('wheel',e=>{if(!playing)return;e.preventDefault();setZoom(zoom*(e.deltaY<0?1.15:1/1.15))},{passive:false});
  $('inventoryButton').addEventListener('click',showInventory);$('missionsButton').addEventListener('click',showMissions);$('historyButton').addEventListener('click',showHistory);$('devToolsButton').addEventListener('click',showDevTools);
  document.querySelectorAll('[data-menu]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.menu==='decorations')showOwnedDecorations();else if(el.dataset.menu==='seeds')showOwnedSeeds();else if(el.dataset.menu==='collection')showCompanions();}));
- $('actionButton').addEventListener('click',interact);$('placementCancel').addEventListener('click',cancelPlacement);
+ $('placementCancel').addEventListener('click',cancelPlacement);
+ const stick=$('movementJoystick');stick.addEventListener('pointerdown',e=>{if(!playing||joystickPointerId!==null)return;e.preventDefault();joystickPointerId=e.pointerId;stick.classList.add('active');stick.setPointerCapture(e.pointerId);moveJoystick(e);});
+ stick.addEventListener('pointermove',e=>{if(e.pointerId===joystickPointerId){e.preventDefault();moveJoystick(e);}});
+ for(const event of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(event,e=>{if(e.pointerId===joystickPointerId){e.preventDefault();resetJoystick();}});
  document.querySelectorAll('[data-fence-orient]').forEach(el=>el.addEventListener('click',()=>setFencePlacementOrientation(el.dataset.fenceOrient)));
  canvas.addEventListener('contextmenu',e=>e.preventDefault());
  canvas.addEventListener('pointerdown',e=>{
@@ -1957,12 +1976,10 @@ function bindEvents(){resize();window.addEventListener('resize',resize);$('stude
   if(!held&&!moved)handleWorldTap(e);
  });
  canvas.addEventListener('pointercancel',e=>{if(worldPointerDown?.pointerId===e.pointerId){clearTimeout(worldLongTimer);worldPointerDown=null;canvas.classList.remove('is-panning');}});
- document.querySelectorAll('[data-dir]').forEach(el=>{el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);touchDirs.add(el.dataset.dir);el.classList.add('pressed');});
- for(const ev of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(ev,()=>{touchDirs.delete(el.dataset.dir);el.classList.remove('pressed')});});
  window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(placementMode){cancelPlacement();e.preventDefault();return;}if(!$('modalOverlay').classList.contains('hidden')){closeModal();e.preventDefault()}return;}
  const el=document.activeElement,editing=el&&(['INPUT','TEXTAREA','SELECT'].includes(el.tagName)||el.isContentEditable);if(editing||!playing||!$('modalOverlay').classList.contains('hidden'))return;
  const code=e.code;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyW','KeyA','KeyS','KeyD'].includes(code)){e.preventDefault();keys.add(code)}if(code==='KeyE'||code==='Space'){e.preventDefault();interact();}if(code==='KeyI'){e.preventDefault();showInventory();}});
- window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>{keys.clear();touchDirs.clear();if(playing){save();flushOnline()}});document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){save();flushOnline()}});window.addEventListener('beforeunload',()=>{if(playing){save();flushOnline()}});}
+ window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>{keys.clear();touchDirs.clear();resetJoystick();if(playing){save();flushOnline()}});document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing){resetJoystick();save();flushOnline()}});window.addEventListener('beforeunload',()=>{if(playing){save();flushOnline()}});}
 if(ONLINE){document.querySelector('.demo-code')?.remove();for(const id of ['devToolsButton','recoverLoginButton','updateNotice']){$(id)?.classList.add('hidden');}}
 bindEvents();
 // No developer debug hook is exposed by the online classroom game.

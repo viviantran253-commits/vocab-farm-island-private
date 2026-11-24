@@ -71,13 +71,9 @@
       <button id="zoomFollow" type="button" aria-label="Follow the farmer and recenter map" title="Follow farmer">Follow</button>
     </nav>
     <div class="mobile-controls" aria-label="Touch movement controls">
-      <div class="dpad">
-        <button class="dpad-up" data-dir="up" aria-label="Walk up">▲</button>
-        <button class="dpad-left" data-dir="left" aria-label="Walk left">◀</button>
-        <button class="dpad-down" data-dir="down" aria-label="Walk down">▼</button>
-        <button class="dpad-right" data-dir="right" aria-label="Walk right">▶</button>
+      <div id="movementJoystick" class="movement-joystick" role="group" aria-label="Drag to move in any direction">
+        <div class="joystick-knob" aria-hidden="true"></div>
       </div>
-      <button id="actionButton" class="action-btn" type="button">ACT</button>
     </div>
     <div id="farmActionBanner" class="farm-action-banner hidden" role="status" aria-live="polite"><span id="farmActionLabel">Planting...</span><div class="farm-action-track"><div id="farmActionBar"></div></div><small>2 seconds</small></div>
     <div id="toastStack" class="toast-stack" aria-live="polite"></div>
