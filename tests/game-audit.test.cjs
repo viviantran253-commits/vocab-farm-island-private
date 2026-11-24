@@ -19,7 +19,7 @@ test('vocabulary categories retain legacy word IDs while showing phrase types', 
     ['piece of cake', '/piːs əv keɪk/', 'idiom', 'dễ như ăn bánh', 'The test is a piece of cake.'],
     ['unknown', '/ʌnˈnəʊn/', 'unsupported', 'không rõ', 'Unknown.'],
   ];
-  context.tab_ = () => ({ getDataRange: () => ({ getDisplayValues: () => rows }) });
+  context.tab_ = () => ({ getLastRow: () => rows.length, getRange: () => ({ getDisplayValues: () => rows }) });
   const words = context.readWords_({}, '01');
   assert.equal(words.length, 9);
   assert.equal(words[0].pos, 'v.phr');

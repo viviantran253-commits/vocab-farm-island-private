@@ -1,4 +1,4 @@
-/* Vocab Farm Island v0.47: official online classroom game. */
+/* Vocab Farm Island: official online classroom game. */
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
@@ -9,12 +9,6 @@ const ASSET = 'assets/';
 const ONLINE = true;
 const DEV_EDITION = false;
 const DEV_SETTINGS_KEY = 'vocabFarmDeveloperSettings_v1';
-function loadDeveloperSettings(){
-  try{
-    const raw=JSON.parse(localStorage.getItem(DEV_SETTINGS_KEY)||'null');
-    return {fastGrowth:raw?.fastGrowth===true,unlimitedSeeds:raw?.unlimitedSeeds!==false};
-  }catch(_){return {fastGrowth:false,unlimitedSeeds:true};}
-}
 let devSettings={fastGrowth:false,unlimitedSeeds:false}; // Classroom rules; never read Developer Test shortcuts
 function storeDeveloperSettings(){
   try{localStorage.setItem(DEV_SETTINGS_KEY,JSON.stringify(devSettings));}catch(e){console.warn('Could not save developer settings',e);}
@@ -158,7 +152,7 @@ const PLOT_UNLOCKS = [
   {level:15, price:700},{level:20, price:800}
 ];
 const STORAGE_PREFIX = 'vocabFarmDeveloperTest_v1_'; // SAME v0.18–v0.27 prefix: no forced reset
-const BUILD_ID='v0.48',BACKUP_EVERY_MS=10*60*1000;
+const BUILD_ID='v0.49',BACKUP_EVERY_MS=10*60*1000;
 const LAST_BUILD_PREFIX='vfi_last_build_v1_';
 let lastBackupAt=0,backupRunning=false,lastSaveErrorAt=0,pendingRecoveryImport=null;
 const BANK_KEY = 'vocabFarmDeveloperCustomBank_v1';
@@ -339,6 +333,7 @@ function canBuySpecial(){return state.level>=SPECIAL_SEED.level&&state.gold>=SPE
 
 let onlineToken=null,onlineDirty=false,onlineBusy=false,onlineRevision=0,onlineSaveAt=0,onlineErrorAt=0,onlineTestMode=false,onlineTestBusy=false;
 let onlinePendingEvents=[];
+let onlinePendingActions=[];
 let specialServerBusy=false;
 let specialSyncPhase=false,pendingSpecialPurchase=false;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -348,6 +343,15 @@ function serverCall(method,...args){return new Promise((resolve,reject)=>{
   runner[method](...args);
 });}
 function makeHistoryId(){return 'ev_'+now()+'_'+Math.random().toString(36).slice(2,12);}
+function recordOnlineAction(type,data={}){if(ONLINE&&onlineToken)onlinePendingActions.push({id:'act_'+now()+'_'+Math.random().toString(36).slice(2,14),type,data});}
+function stopOnlineSession(message){
+ const token=onlineToken;onlineToken=null;onlineDirty=false;onlinePendingActions=[];onlinePendingEvents=[];
+ clearTimeout(onlineSaveTimer);closeModal();playing=false;
+ $('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
+ $('loginError').textContent=message;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');
+ if(token)void serverCall('studentLogout',token).catch(()=>{});
+}
+function acceptAuthoritativeProfile(profile){if(!profile||onlineDirty||onlinePendingActions.length)return;for(const key of ['gold','level','xp','xpTotal','seeds','harvest','fenceStock','decorStock','plots','companions','discovered','daily','weekly','orders','ordersExpire','history','sales','badges','specialSeedLastPurchase'])state[key]=profile[key];updateHUD();}
 let onlineSaveTimer=null;
 function onlineSnapshot(){
  const copy=JSON.parse(JSON.stringify(state));
@@ -359,21 +363,23 @@ async function combinedMagicCall(method,args){
  // A dispatched save cannot be cancelled; include all later changes in this request.
  for(let tries=0;onlineBusy&&tries<50;tries++)await delay(100);
  if(onlineBusy)throw Error('Progress is still syncing. Try again.');
- const events=onlinePendingEvents.slice(0,50),revision=onlineRevision,snapshot=onlineSnapshot();
+ const events=onlinePendingEvents.slice(0,50),actions=onlinePendingActions.slice(0,50),revision=onlineRevision,snapshot=onlineSnapshot();
  const clientAtRequest={gold:state.gold,specialSeeds:state.seeds.special||0};
  onlineDirty=false;
  const started=performance.now();
  try{
-  const result=await serverCall(method,onlineToken,...args,revision,snapshot,events);
-  if(result?.conflict)throw Error('Progress changed on another device. Log in again before continuing.');
+  const result=await serverCall(method,onlineToken,...args,revision,snapshot,events,actions);
+  if(result?.conflict||result?.rejected){stopOnlineSession('Progress changed or could not be verified. Log in again to load the saved game.');throw Error('Progress was not confirmed. Please log in again.');}
   if(!result?.ok)throw Error('The action was not confirmed.');
   onlineRevision=result.revision;
   onlinePendingEvents=onlinePendingEvents.filter(x=>!events.includes(x));
-  if(onlinePendingEvents.length)onlineDirty=true;
+  onlinePendingActions=onlinePendingActions.filter(x=>!actions.includes(x));
+  if(onlinePendingEvents.length||onlinePendingActions.length)onlineDirty=true;
+  acceptAuthoritativeProfile(result.profile);
   onlineSaveAt=now();
   console.info('[Vocab Farm] '+method+' round trip: '+Math.round(performance.now()-started)+' ms',result.timing||{});
   return {...result,clientAtRequest};
- }catch(err){onlineDirty=true;throw err;}
+ }catch(err){if(onlineToken)onlineDirty=true;throw err;}
 }
 function queueOnlineSave(){if(!ONLINE||!onlineToken)return;onlineDirty=true;setSaveState('pending','● Saving to Google Sheets…');clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},1600);}
 async function flushOnline(){
@@ -381,20 +387,23 @@ async function flushOnline(){
  if(onlineBusy||onlineTestBusy||(specialServerBusy&&!specialSyncPhase))return false;
  if(!onlineDirty)return true;
  onlineBusy=true;onlineDirty=false;
- const token=onlineToken,events=onlinePendingEvents.slice(0,50);
+ const token=onlineToken,events=onlinePendingEvents.slice(0,50),actions=onlinePendingActions.slice(0,50);
  const copy=JSON.parse(JSON.stringify(state));
  // Keep long-term answer history in the server's _History rows, not in one large Sheet cell.
  copy.history=copy.history.slice(-40);
  copy.sales=(copy.sales||[]).slice(-35);
  copy.lastWords=(copy.lastWords||[]).slice(-20);
  const rev=onlineRevision;
+ const started=performance.now();
  try{
-  const response=await serverCall('studentSave',token,JSON.stringify(copy),events,rev);
-  if(response?.conflict){onlineDirty=true;setSaveState('error','⚠ Save conflict — log in again');toast('Another device changed this account. Log in again to avoid losing progress.',true);return false;}
+  const response=await serverCall('studentSave',token,JSON.stringify(copy),events,rev,actions);
+  if(response?.conflict||response?.rejected){stopOnlineSession('Progress changed or could not be verified. Log in again to load the saved game.');return false;}
   onlineRevision=response.revision;
   onlinePendingEvents=onlinePendingEvents.filter(x=>!events.includes(x));
-  // Never discard pending events that were not included in the current server batch.
-  if(onlinePendingEvents.length)onlineDirty=true;
+  onlinePendingActions=onlinePendingActions.filter(x=>!actions.includes(x));
+  if(onlinePendingEvents.length||onlinePendingActions.length)onlineDirty=true;
+  acceptAuthoritativeProfile(response.profile);
+  console.info('[Vocab Farm] studentSave round trip: '+Math.round(performance.now()-started)+' ms',response.timing||{});
   onlineSaveAt=now();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Saved to Google Sheets');if(onlineDirty){clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},700);}return true;
  }catch(err){onlineDirty=true;setSaveState('error','⚠ Save not synced');if(now()-onlineErrorAt>10000){toast('Online save failed. Check your connection.',true);onlineErrorAt=now();}return false;}
  finally{onlineBusy=false;}
@@ -508,7 +517,7 @@ function syncDaily(){
  if(changed)save();
  return changed;
 }
-function initOrders(){if(!state)return;if(!state.orders.length||now()>=state.ordersExpire){state.orders=Array.from({length:3},(_,i)=>makeOrder(i));state.ordersExpire=now()+ORDER_MS;save();}}
+function initOrders(){if(!state)return;if(!state.orders.length||now()>=state.ordersExpire){state.orders=Array.from({length:3},(_,i)=>makeOrder(i));state.ordersExpire=now()+ORDER_MS;recordOnlineAction('refresh-orders');save();}}
 function makeOrder(i){const options=CROP_DATA.filter(c=>c.level<=state.level);const amount=Math.min(3,Math.max(1,options.length));const selected=shuffled(options).slice(0,Math.min(amount,1+(i%3)));return {id:`ord_${now()}_${i}_${Math.floor(Math.random()*10000)}`,items:selected.map((c,n)=>({id:c.id,qty:1+(Math.floor(Math.random()*3))})),fulfilled:false};}
 function earnXP(n){state.xpTotal+=n;state.xp+=n;let lvls=0;while(state.xp>=xpNeed(state.level)&&lvls<10000){state.xp-=xpNeed(state.level);state.level++;lvls++;}if(lvls){toast(`⭐ Level up! You're now Level ${state.level}!`);checkBadges();}}
 function checkBadges(){const earned=state.badges;const farmCorrect=state.history.filter(x=>x.source==='Farm'&&x.correct).length;
@@ -522,7 +531,6 @@ function chooseWord(){if(ONLINE&&!bank.length)return null;const recent=new Set(s
  return bank[0].id;
 }
 function wordById(id){return bank.find(w=>w.id===id)||SAMPLE_WORDS.find(w=>w.id===id)||SAMPLE_WORDS[0]}
-function logAnswer(word,source,stage,answer,correct,attempt){const entry={eventId:makeHistoryId(),time:now(),source,stage,wordId:word.id,word:word.english,answer,expected:word.meaning,correct,attempt};state.history.push(entry);if(state.history.length>3000)state.history=state.history.slice(-3000);void VFIRecovery.archiveAttempt(state.id,entry);checkBadges()}
 
 function loadImage(path){if(images[path])return images[path];const i=new Image();images[path]=i;i.src=path;i.onload=()=>{assetsLoading++;};i.onerror=()=>{console.warn('Missing image',path)};return i;}
 function asset(path){return loadImage(path)}
@@ -778,12 +786,12 @@ function showDecorationShop(){
 }
 function buyDecoration(id){
  const item=DECOR_BY_ID[id];if(!item||RETIRED_DECOR_IDS.has(id))return toast('This decoration is no longer sold.',true);if(state.gold<item.price)return toast('Not enough gold.',true);
- state.gold-=item.price;state.decorStock[id]=(state.decorStock[id]||0)+1;save();updateHUD();showDecorationShop();toast(`${item.name} added to your bag!`);
+ state.gold-=item.price;state.decorStock[id]=(state.decorStock[id]||0)+1;recordOnlineAction('buy-decor',{item:id});save();updateHUD();showDecorationShop();toast(`${item.name} added to your bag!`);
 }
 function buyDecorationPack(id){
  const pack=DECOR_PACKS.find(p=>p.id===id);if(!pack||state.gold<pack.price)return toast('Not enough gold.',true);
  state.gold-=pack.price;for(const item of DECOR_ITEMS.filter(i=>i.pack===id))state.decorStock[item.id]=(state.decorStock[item.id]||0)+1;
- save();updateHUD();showDecorationShop();toast(`${pack.name} added: four decorations!`);
+ recordOnlineAction('buy-pack',{pack:id});save();updateHUD();showDecorationShop();toast(`${pack.name} added: four decorations!`);
 }
 
 async function buySpecialSeed(){
@@ -794,8 +802,12 @@ async function buySpecialSeed(){
   pendingSpecialPurchase=true;showShop();
   try{
    const result=await combinedMagicCall('studentSpecialBuy',[]);
-   state.gold=result.gold+(state.gold-result.clientAtRequest.gold);
-   state.seeds.special=result.specialSeeds+((state.seeds.special||0)-result.clientAtRequest.specialSeeds);
+   // A quiet request has already applied the authoritative profile. Preserve only
+   // actions made while the purchase request was in flight.
+   if(onlineDirty){
+    state.gold=result.gold+(state.gold-result.clientAtRequest.gold);
+    state.seeds.special=result.specialSeeds+((state.seeds.special||0)-result.clientAtRequest.specialSeeds);
+   }
    state.specialSeedLastPurchase=result.day;
    updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Special Seed saved to Google Sheets');toast('Purchased 1 Special Seed!');
   }catch(err){toast('Special Seed purchase not confirmed: '+(err?.message||err),true);}
@@ -809,10 +821,10 @@ function refreshSpecialSeedViews(){
  else if(activeModal==='inventory')showInventory();
  else if(activeModal==='owned-seeds')showOwnedSeeds();
 }
-function buyFence(){if(state.gold<FENCE_PRICE)return;state.gold-=FENCE_PRICE;state.fenceStock++;save();updateHUD();showShop();}
+function buyFence(){if(state.gold<FENCE_PRICE)return;state.gold-=FENCE_PRICE;state.fenceStock++;recordOnlineAction('buy-fence');save();updateHUD();showShop();}
 function canRescue(){const seeds=Object.values(state.seeds).reduce((a,b)=>a+b,0),harvest=Object.values(state.harvest).reduce((a,b)=>a+b,0),growing=state.plots.some(p=>p.crop);return state.gold<CROPS.carrot.seed&&seeds===0&&harvest===0&&!growing;}
-function buySeed(id){const c=CROPS[id];if(!c||state.level<c.level||state.gold<c.seed){toast('Not enough gold or level to buy this seed.',true);return;}state.gold-=c.seed;state.seeds[id]=(state.seeds[id]||0)+1;save();updateHUD();toast(`Purchased 1 ${c.name} seed!`);showShop()}
-function getRescue(){if(!canRescue()){toast('Emergency seed is only available when you cannot continue farming.');return;}state.seeds.carrot=1;save();toast('One free carrot seed is ready!');showShop()}
+function buySeed(id){const c=CROPS[id];if(!c||state.level<c.level||state.gold<c.seed){toast('Not enough gold or level to buy this seed.',true);return;}state.gold-=c.seed;state.seeds[id]=(state.seeds[id]||0)+1;recordOnlineAction('buy-seed',{crop:id});save();updateHUD();toast(`Purchased 1 ${c.name} seed!`);showShop()}
+function getRescue(){if(!canRescue()){toast('Emergency seed is only available when you cannot continue farming.');return;}state.seeds.carrot=1;recordOnlineAction('rescue');save();toast('One free carrot seed is ready!');showShop()}
 function showDevTools(){
  if(!state)return;
  if(ONLINE){
@@ -893,7 +905,7 @@ function sellDecoration(id){
  state.sales=Array.isArray(state.sales)?state.sales:[];
  state.sales.push({time:now(),type:'decor-sale',itemId:id,gold:reward});
  state.sales=state.sales.slice(-500);
- save();updateHUD();showOwnedDecorations();toast(`${item.name} sold for ${reward} gold.`);
+ recordOnlineAction('sell-decor',{item:id});save();updateHUD();showOwnedDecorations();toast(`${item.name} sold for ${reward} gold.`);
 }
 function showFenceSellConfirm(){
  if((state.fenceStock||0)<=0){showOwnedDecorations();return;}
@@ -906,7 +918,7 @@ function sellFence(){
  state.fenceStock--;state.gold+=reward;
  state.sales=Array.isArray(state.sales)?state.sales:[];
  state.sales.push({time:now(),type:'fence-sale',gold:reward});state.sales=state.sales.slice(-500);
- save();updateHUD();showOwnedDecorations();toast(`Wooden Fence sold for ${reward} gold.`);
+ recordOnlineAction('sell-fence');save();updateHUD();showOwnedDecorations();toast(`Wooden Fence sold for ${reward} gold.`);
 }
 function showInventory(){const section=(kind,label,list)=>`<h3 class="section-heading">${label}</h3><div class="inventory-grid">${list.map(c=>`<div class="inventory-cell">${img(cropIcon(c.id,kind==='seed'?'seed':'harvested'))}<span>${escapeHTML(c.name)}</span><small>× ${kind==='seed'?(state.seeds[c.id]||0):(state.harvest[c.id]||0)}</small></div>`).join('')}</div>`;
  openModal('Your Inventory',`<div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">🌱 Plots: ${state.plots.filter(p=>p.unlocked).length} / 10</span></div>${section('seed','Seed packets',CROP_DATA)}${section('harvest','Harvested crops',CROP_DATA)}<h3 class="section-heading">Magical items</h3><div class="inventory-grid"><div class="inventory-cell">${img(specialSeedArt)}<span>Special Seed</span><small>× ${state.seeds.special||0}${pendingSpecialPurchase?' · purchase pending':''}</small></div><div class="inventory-cell">${img('assets/fences/fence_horizontal.png')}<span>Fence</span><small>× ${state.fenceStock||0}</small></div></div><h3 class="section-heading">Island Decorations</h3><div class="inventory-grid">${DECOR_ITEMS.filter(item=>(state.decorStock[item.id]||0)>0).map(item=>`<div class="inventory-cell">${img(decorArt(item))}<span>${escapeHTML(item.name)}</span><small>× ${state.decorStock[item.id]}</small><button class="secondary-btn" data-do="place-decor" data-item="${item.id}">Place</button><button class="secondary-btn" data-do="sell-decor" data-item="${item.id}">Sell · ${decorResale(item.id)} gold</button></div>`).join('')||'<p class="muted">No decorations yet. Visit the Decoration Shop.</p>'}</div><div class="button-row"><button class="primary-btn" data-do="decor-shop">🌸 Decoration Shop</button></div><div class="button-row"><button class="primary-btn" data-do="place-fence" ${state.fenceStock>0?'':'disabled'}>Place fence</button><button class="secondary-btn" data-do="companions">Companions (${state.companions.length})</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Seed Shop</button><button class="secondary-btn" data-do="harbour">⛵ Sell at Harbour</button></div>`,ONLINE?'INVENTORY • SAVED TO GOOGLE SHEETS':'INVENTORY • SAVED IN THIS BROWSER','inventory');}
@@ -965,7 +977,7 @@ function showPlot(i){const p=state.plots[i],assetPreview=plotArt(i);if(!p.unlock
 function plantSpecial(i){
  const plot=state.plots[i];if(!plot||!plot.unlocked||plot.crop||!(state.seeds.special>0)||actionMotion)return;
  if(ONLINE&&!bank.length){toast('Your teacher must add vocabulary first.',true);return;}
- const wid=chooseWord(),w=wordById(wid);state.seeds.special--;
+ const wid=chooseWord(),w=wordById(wid);state.seeds.special--;recordOnlineAction('plant',{plot:i,crop:'special',wordId:wid});
  plot.crop={type:'special',stage:0,wordId:wid,wordData:w,nextDueAt:now()+cropInterval(SPECIAL_SEED),retryAfter:0,wrong:0};
  save();if(ONLINE)flushOnline();updateHUD();beginTimedAction('plant',()=>showPlantVocabulary(w),i);
 }
@@ -985,11 +997,13 @@ async function finishSpecialReveal(index,questionContext=null,actionDone=null){
  try{
   const result=await combinedMagicCall('studentSpecialReveal',[index]);
   if(!result?.ok||!result.crop||!result.crop.characterId)throw Error('No confirmed reveal received.');
-  Object.assign(crop,result.crop);delete crop.pendingReveal;
+  const liveCrop=state.plots[index]?.crop;
+  if(!liveCrop)throw Error('Saved crop is missing. Log in again.');
+  Object.assign(liveCrop,result.crop);delete liveCrop.pendingReveal;
   const pxy=CROP_PLOT(index);spawnEffect('growth_transformation',pxy.x+pxy.width/2,pxy.y+40);
   updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Saved to Google Sheets');
   const word=questionContext?.word;
-  const message=`${petById(crop).name} (${companionStars(crop.rarity)}) revealed!`;
+  const message=`${petById(liveCrop).name} (${companionStars(liveCrop.rarity)}) revealed!`;
   const feedback=()=>openModal('',`<div class="answer-result correct">✓ Correct</div>${word?wordCard(word,'neutral'):''}<div class="timer-block">${escapeHTML(message)}</div>`,'','feedback');
   if(actionDone){await actionDone;feedback();}else beginTimedAction('water',feedback,index);
  }catch(err){if(actionDone)await actionDone;toast('Reveal was not confirmed. Use Finish character reveal to retry. '+(err?.message||''),true);showSpecialPlot(index);}
@@ -1005,7 +1019,7 @@ function harvestSpecial(i){const plot=state.plots[i],c=plot?.crop;if(!c||c.type!
  const pet={id:'pet_'+now()+'_'+Math.random().toString(36).slice(2,8),characterId:c.characterId,rarity:c.rarity,
   x:pos.x,y:pos.y,dir:'down',frame:0,moveAt:now()+1500,
   fenceHome:{x:pos.x,y:pos.y},safePosition:{x:pos.x,y:pos.y}};
- spawnEffect('harvest_celebration',pos.x,pos.y-12);state.companions.push(pet);if(!state.discovered.includes(pet.characterId))state.discovered.push(pet.characterId);plot.crop=null;
+ spawnEffect('harvest_celebration',pos.x,pos.y-12);state.companions.push(pet);recordOnlineAction('harvest-special',{plot:i,petId:pet.id});if(!state.discovered.includes(pet.characterId))state.discovered.push(pet.characterId);plot.crop=null;
  save();if(ONLINE)flushOnline();updateHUD();beginTimedAction('harvest',()=>{toast(`${petById(pet).name} joined your island!`);showCompanions();},i);
 }
 function unlockPlot(i){if(i!==nextLockedPlot())return;
@@ -1015,7 +1029,7 @@ function unlockPlot(i){if(i!==nextLockedPlot())return;
  if(state.gold<rule.price){toast(`Need ${rule.price} gold to unlock Plot ${i+1}.`,true);showPlot(i);return;}
  state.gold-=rule.price;
  state.plots[i].unlocked=true;
- save();updateHUD();toast(`Plot ${i+1} unlocked for ${rule.price} gold!`);showPlot(i);
+ recordOnlineAction('unlock',{plot:i});save();updateHUD();toast(`Plot ${i+1} unlocked for ${rule.price} gold!`);showPlot(i);
 }
 function cropInterval(c){
  const seconds=ONLINE&&onlineTestMode?Number(state?.settings?.testGrowthSeconds)||0:0;
@@ -1025,7 +1039,7 @@ function plantCrop(i,id){const plot=state.plots[i],c=CROPS[id];if(!plot?.unlocke
  if(ONLINE&&!bank.length){toast('Teacher has not added any vocabulary for this student yet.',true);return;}
  const wId=chooseWord();const w=wordById(wId);
  // The carrot wait is now 30 seconds per care stage (normal mode), measured from planting; the 2-second action animation is included.
- state.seeds[id]--;plot.crop={type:id,wordId:wId,wordData:w,stage:0,nextDueAt:now()+cropInterval(c),retryAfter:0,wrong:0};save();if(ONLINE)flushOnline();updateHUD();
+ state.seeds[id]--;recordOnlineAction('plant',{plot:i,crop:id,wordId:wId});plot.crop={type:id,wordId:wId,wordData:w,stage:0,nextDueAt:now()+cropInterval(c),retryAfter:0,wrong:0};save();if(ONLINE)flushOnline();updateHUD();
  beginTimedAction('plant',()=>showPlantVocabulary(w),i);
 }
 
@@ -1037,9 +1051,9 @@ function showHarbour(){initOrders();const expire=formatSeconds(state.ordersExpir
 function showPetExchangeConfirm(id){const pet=state.companions.find(p=>p.id===id);if(!pet)return;const reward=SPECIAL_REWARDS[pet.rarity];
  openModal('Confirm Harbour Exchange',`<div class="plot-banner">${img(companionArt(pet.characterId,'idle','idle_down'))}<div><h3>${escapeHTML(petById(pet).name)} ${companionStars(pet.rarity)}</h3><p>The companion will leave your island permanently.</p><p>Receive ${goldIconHTML()} ${reward.gold} gold and ${reward.xp} XP.</p></div></div><div class="button-row"><button class="danger-btn" data-do="sell-pet-confirm" data-pet="${escapeHTML(pet.id)}">Confirm exchange</button><button class="secondary-btn" data-do="harbour">Keep companion</button></div>`,'COMPANION EXCHANGE','confirm');
 }
-function sellPet(id){const index=state.companions.findIndex(p=>p.id===id);if(index<0)return;const pet=state.companions[index],r=SPECIAL_REWARDS[pet.rarity];state.companions.splice(index,1);state.gold+=r.gold;earnXP(r.xp);state.sales.push({time:now(),type:'companion-exchange',characterId:pet.characterId,rarity:pet.rarity,gold:r.gold,xp:r.xp});state.sales=state.sales.slice(-500);save();if(ONLINE)flushOnline();updateHUD();toast(`${petById(pet).name} exchanged for ${r.gold} gold`);showHarbour();}
-function sellCrop(id){const c=CROPS[id];if(!c||!(state.harvest[id]>0))return;state.harvest[id]--;state.gold+=c.sale;earnXP(c.xp);state.sales.push({time:now(),type:'individual',crop:id,qty:1,gold:c.sale,xp:c.xp});state.sales=state.sales.slice(-500);save();if(ONLINE)flushOnline();updateHUD();toast(`Sold ${c.name}: +${c.sale} gold, +${c.xp} XP!`);showHarbour()}
-function completeOrder(index){const o=state.orders[index];if(!o||!o.items.every(x=>(state.harvest[x.id]||0)>=x.qty))return;let normal=0,xp=0;for(const x of o.items){state.harvest[x.id]-=x.qty;normal+=CROPS[x.id].sale*x.qty;xp+=CROPS[x.id].xp*x.qty;}const gold=Math.round(normal*1.2);state.gold+=gold;earnXP(xp);state.sales.push({time:now(),type:'shipment',items:o.items,gold,xp});state.sales=state.sales.slice(-500);state.orders[index]=makeOrder(index);save();if(ONLINE)flushOnline();updateHUD();
+function sellPet(id){const index=state.companions.findIndex(p=>p.id===id);if(index<0)return;const pet=state.companions[index],r=SPECIAL_REWARDS[pet.rarity];state.companions.splice(index,1);state.gold+=r.gold;earnXP(r.xp);state.sales.push({time:now(),type:'companion-exchange',characterId:pet.characterId,rarity:pet.rarity,gold:r.gold,xp:r.xp});state.sales=state.sales.slice(-500);recordOnlineAction('sell-pet',{petId:id});save();if(ONLINE)flushOnline();updateHUD();toast(`${petById(pet).name} exchanged for ${r.gold} gold`);showHarbour();}
+function sellCrop(id){const c=CROPS[id];if(!c||!(state.harvest[id]>0))return;state.harvest[id]--;state.gold+=c.sale;earnXP(c.xp);state.sales.push({time:now(),type:'individual',crop:id,qty:1,gold:c.sale,xp:c.xp});state.sales=state.sales.slice(-500);recordOnlineAction('sell-crop',{crop:id});save();if(ONLINE)flushOnline();updateHUD();toast(`Sold ${c.name}: +${c.sale} gold, +${c.xp} XP!`);showHarbour()}
+function completeOrder(index){if(ONLINE&&(onlineBusy||onlineDirty)){toast('Saving the latest orders. Try again in a moment.');return;}const o=state.orders[index];if(!o||!o.items.every(x=>(state.harvest[x.id]||0)>=x.qty))return;let normal=0,xp=0;for(const x of o.items){state.harvest[x.id]-=x.qty;normal+=CROPS[x.id].sale*x.qty;xp+=CROPS[x.id].xp*x.qty;}const gold=Math.round(normal*1.2);state.gold+=gold;earnXP(xp);state.sales.push({time:now(),type:'shipment',items:o.items,gold,xp});state.sales=state.sales.slice(-500);state.orders[index]=makeOrder(index);recordOnlineAction('ship',{order:index,orderId:o.id});save();if(ONLINE)flushOnline();updateHUD();
  openModal('Shipment complete! 🎉',`<div class="module-intro">${img('assets/ui/icons/64/icon_harbour_orders.png')}<div><h3>Great work, farmer!</h3><p>Your order is on its way. A new shipment is now available.</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} +${gold} gold</span><span class="stat-chip">⭐ +${xp} XP</span><span class="stat-chip">20% order bonus included</span></div><div class="button-row"><button class="primary-btn" data-do="harbour">View new orders</button><button class="secondary-btn" data-do="close">Back to island</button></div>`,'HARBOUR • REWARDS','feedback');}
 function badgeGrid(){const arr=[['daily','Daily challenges'],['weekly','Weekly challenges'],['vocabulary','Vocabulary mastery'],['level','Level milestone']];return `<div class="badge-wall">${arr.map(([id,title])=>`<div class="badge-tile ${state.badges.includes(id)?'':'locked'}">${img(`assets/ui/badges/64/badge_${id}.png`)}<strong>${escapeHTML(title)}</strong><br><small>${state.badges.includes(id)?'Earned!':'Locked'}</small></div>`).join('')}</div>`}
 function showCompanions(filter='all'){
@@ -1245,7 +1259,7 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
   if(entry.answers[q.word.id])return;
   entry.answers[q.word.id]={time:now(),correct,answer:given};const reward=weekly?5:3;
   if(correct){entry.correct++;state.gold+=reward;}
-  logQuestionAttempt(q.word,weekly?'Weekly challenge':'Daily challenge','English → Vietnamese',given,correct,1,correctValue);checkBadges();save();if(ONLINE)flushOnline();updateHUD();
+  logQuestionAttempt(q.word,weekly?'Weekly challenge':'Daily challenge','English → Vietnamese',given,correct,1,correctValue);recordOnlineAction('challenge',{kind:q.kind,wordId:q.word.id,answer:given});checkBadges();save();if(ONLINE)flushOnline();updateHUD();
   // Stay in Challenges after answering instead of opening a closable feedback popup.
   // The answered question shows a compact result and the correct answer in-place.
   const result={kind:q.kind,index:q.dailyIndex,correct,reward,expected:correctValue};
@@ -1253,7 +1267,7 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
  }
  const plot=state.plots[q.plotIndex],crop=plot?.crop;if(!crop)return;
  const attempt=crop.wrong+1;
- logQuestionAttempt(q.word,'Farm',crop.type==='special'?SPECIAL_ACTIONS[crop.stage]:ACTIONS[crop.stage],given,correct,attempt,correctValue);
+ logQuestionAttempt(q.word,'Farm',crop.type==='special'?SPECIAL_ACTIONS[crop.stage]:ACTIONS[crop.stage],given,correct,attempt,correctValue);recordOnlineAction('answer',{plot:q.plotIndex,answer:given});
  if(!correct){crop.wrong++;crop.retryAfter=now()+crop.wrong*10000;save();if(ONLINE)flushOnline();
   openModal('',`<div class="answer-result incorrect"><span class="wrong-x">×</span> Incorrect</div><div class="timer-block compact-timer">Try again in <strong class="retry-live" data-until="${crop.retryAfter}">${formatSeconds(crop.retryAfter-now())}</strong></div><div class="button-row"><button id="retryNow" class="primary-btn" data-do="retry-plot" data-index="${q.plotIndex}" disabled>Try again</button></div>`,'','retry');return;
  }
@@ -1540,7 +1554,7 @@ function showDecorationTools(index){const d=state.decorations[index],item=d&&DEC
  openModal(item.name,`<div class="plot-banner">${img(decorArt(item))}<div><h3>${escapeHTML(item.name)}</h3><p>Placed on your island</p></div></div><div class="button-row"><button class="primary-btn" data-do="move-decor" data-decor="${index}">Move</button><button class="secondary-btn" data-do="remove-decor" data-decor="${index}">Return to bag</button></div>`,'ISLAND DECORATION','decor-tools');
 }
 function removeDecoration(index){const d=state.decorations[index];if(!d)return;
- state.decorStock[d.id]=(state.decorStock[d.id]||0)+1;state.decorations.splice(index,1);save();showOwnedDecorations();toast('Decoration returned to bag.');
+ state.decorStock[d.id]=(state.decorStock[d.id]||0)+1;state.decorations.splice(index,1);recordOnlineAction('remove-decor',{item:d.id});save();showOwnedDecorations();toast('Decoration returned to bag.');
 }
 function drawDecorations(){
  for(const d of state.decorations){
@@ -1565,7 +1579,7 @@ function finalizePlacement(pos){const mode=placementMode;if(!mode)return false;
   const item=DECOR_BY_ID[mode.item],point=snapDecoration(pos),ignore=mode.mode==='move'?mode.index:-1;
   if(!validateDecoration(item,point.x,point.y,ignore)){toast('Choose open ground away from other objects.',true);return true;}
   if(mode.mode==='move'){if(!state.decorations[mode.index])return true;state.decorations[mode.index]={id:mode.item,x:point.x,y:point.y};}
-  else{if(!(state.decorStock[mode.item]>0))return true;state.decorStock[mode.item]--;state.decorations.push({id:mode.item,x:point.x,y:point.y});}
+  else{if(!(state.decorStock[mode.item]>0))return true;state.decorStock[mode.item]--;state.decorations.push({id:mode.item,x:point.x,y:point.y});recordOnlineAction('place-decor',{item:mode.item});}
   setPlacementMode(null);save();toast(`${item.name} placed! Long-press to move or remove.`);return true;
  }
  if(mode.kind==='pet'){
@@ -1575,7 +1589,7 @@ function finalizePlacement(pos){const mode=placementMode;if(!mode)return false;
  const f=snapFence(pos,mode.dir||'h',mode.mode==='move'?mode.index:-1);
  if(!validateFence(f,mode.mode==='move'?mode.index:-1)){toast('Cannot place here. Choose another grid segment.',true);return true;}
  if(mode.mode==='move'){if(!state.fences[mode.index]){setPlacementMode(null);return true;}state.fences[mode.index]=f;}
- else{if(state.fenceStock<1){setPlacementMode(null);return true;}state.fences.push(f);state.fenceStock--;}
+ else{if(state.fenceStock<1){setPlacementMode(null);return true;}state.fences.push(f);state.fenceStock--;recordOnlineAction('place-fence');}
  resetCompanionFenceAnchors();
  setPlacementMode(null);save();toast('Fence placed. Touch and hold it for options.');return true;
 }
@@ -1588,7 +1602,7 @@ function setFenceOrientation(i,dir){const f=state.fences[i];if(!f||!['h','v'].in
  if(!validateFence(rotated,i)){toast('This orientation is blocked. Move the fence to an open segment.',true);return;}
  state.fences[i]=rotated;resetCompanionFenceAnchors();save();showFenceTools(i);
 }
-function removeFence(i){if(!state.fences[i])return;state.fences.splice(i,1);state.fenceStock++;resetCompanionFenceAnchors();save();showInventory();}
+function removeFence(i){if(!state.fences[i])return;state.fences.splice(i,1);state.fenceStock++;recordOnlineAction('remove-fence');resetCompanionFenceAnchors();save();showInventory();}
 function drawFenceSprite(f,alpha=1){
  // Native 64px fence art: align visible post caps exactly to geometric collision endpoints.
  const [a]=fenceEndpoints(f),horizontal=f.dir==='h';const path=`assets/fences/fence_${horizontal?'horizontal':'vertical'}.png`;
@@ -1884,8 +1898,18 @@ function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(
  case 'export-template':exportTemplate();break;
  case 'sync-words':reloadOnlineWords();break;
  case 'sync-save':{save();flushOnline();toast('Sending progress to Google Sheets…');break;}
- case 'log-out':{setPlacementMode(null);clearPendingPetTap();petSpeech=null;save();if(ONLINE)flushOnline();closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');$('devToolsButton').classList.add('hidden');break;}
+ case 'log-out':{void logoutStudent();break;}
  }
+}
+async function logoutStudent(){
+ setPlacementMode(null);clearPendingPetTap();petSpeech=null;save();
+ if(ONLINE){
+  for(let i=0;onlineBusy&&i<50;i++)await delay(100);
+  if(onlineBusy||onlineDirty&&!(await flushOnline())){toast('Progress has not synced. Please retry logout after the save succeeds.',true);return;}
+  try{await serverCall('studentLogout',onlineToken);}catch(err){toast('Could not revoke the session. Please retry logout.',true);return;}
+ }
+ closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
+ toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');$('devToolsButton').classList.add('hidden');
 }
 function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el.textContent=countdownLong(Number(el.dataset.until)-now());});document.querySelectorAll('.live-countdown,.retry-live').forEach(el=>{let left=Number(el.dataset.until)-now();el.textContent=formatSeconds(left);});
  const retry=$('retryNow');if(retry&&retry.disabled){const ix=Number(retry.dataset.index),crop=state.plots[ix]?.crop;if(crop&&now()>=crop.retryAfter)retry.disabled=false;}
@@ -1918,13 +1942,13 @@ function loginIdToInternal_(loginId){
 async function beginGame(){let slot;const loginId=$('studentSelect').value.trim(),pin=$('passcode').value;
  try{loginIdToInternal_(loginId);}catch(e){$('loginError').textContent=e.message;return;}
 
- if(!/^\d{4}$/.test(pin)){$('loginError').textContent='Enter a 4-digit passcode.';return;}
+ if(!/^(?:\d{4}|\d{6})$/.test(pin)){$('loginError').textContent='Enter your 4- or 6-digit passcode.';return;}
  $('loginError').textContent='';$('playButton').disabled=true;
  let existingSaveWasPresent=false;
  try{
   if(ONLINE){const resp=await serverCall('studentLogin',loginId,pin);
    slot=String(resp.profile?.id||'');if(!/^0[1-9]$|^1[01]$/.test(slot))throw Error('The online profile is unavailable. Please contact your teacher.');
-   onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];bank=resp.words||[];
+   onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];onlinePendingActions=[];bank=resp.words||[];
    onlineTestMode=resp.testMode===true&&slot==='11';document.body.classList.toggle('teacher-test-mode',onlineTestMode);$('devToolsButton').classList.toggle('hidden',!onlineTestMode);
    if(!resp.profile)throw Error('The online profile is unavailable. No replacement account will be created.');state=VFIRecovery.migrateProfile(resp.profile,newProfile(slot),slot);delete state.landTax;
    if(!state.plots||state.plots.length!==10)throw Error('Invalid online progress.');

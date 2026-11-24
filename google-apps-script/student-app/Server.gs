@@ -1,9 +1,9 @@
-/** Vocab Farm Island v0.48: official student web app.
+/** Vocab Farm Island v0.49: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
  * NEVER paste a password, teacher PIN, or OAuth token into this file.
- * WARNING: This classroom prototype does not provide tamper-proof grading/economy.
+ * Server-owned action rules protect the online economy. Vocabulary answers remain visible to a signed-in student.
  */
 const ACCOUNTS_TAB = '_Students';
 const PROGRESS_TAB = '_Progress';
@@ -94,8 +94,13 @@ function canonicalWordPos_(raw,english){
  return String(english||'').trim().toLowerCase()==='focus on'&&pos==='v'?'v.phr':pos;
 }
 
-function readWords_(ss,id) {
-  const sh=tab_(ss,VOCAB_PREFIX+id);const rows=sh.getDataRange().getDisplayValues();
+function readWords_(ss,id,force=false) {
+  const cache=typeof CacheService==='undefined'?null:CacheService.getScriptCache(),key='words_v2_'+id;
+  if(cache&&!force){const packed=cache.get(key);if(packed)try{
+    const bytes=Utilities.base64Decode(packed),json=Utilities.ungzip(Utilities.newBlob(bytes)).getDataAsString();
+    return JSON.parse(json);
+  }catch(error){console.warn('Vocabulary cache invalid: '+error);}}
+  const sh=tab_(ss,VOCAB_PREFIX+id),last=sh.getLastRow(),rows=last?sh.getRange(1,1,last,5).getDisplayValues():[];
   const out=[],taken={};
   for(let i=1;i<rows.length;i++){
     const [en,ipa,pos0,meaning,example]=rows[i].map(x=>String(x).trim());
@@ -108,14 +113,16 @@ function readWords_(ss,id) {
     if(taken[key])continue; taken[key]=true;
     out.push({id:key,english:en,ipa,pos,meaning,example});
   }
-  return out.slice(0,1000);
+  const words=out.slice(0,1000);
+  if(cache)try{const packed=Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(words))).getBytes());if(packed.length<95000)cache.put(key,packed,60);}catch(error){console.warn('Vocabulary cache unavailable: '+error);}
+  return words;
 }
 
 function freshProfile_(id,name){
   return {version:2,saveSchemaVersion:1,id,name,gold:30,level:1,xp:0,xpTotal:0,seeds:{carrot:2},harvest:{},
     companions:[],discovered:[],fences:[],fenceStock:0,decorations:[],decorStock:{},specialSeedLastPurchase:'',
     plots:Array.from({length:10},(_,i)=>({unlocked:i<2,crop:null})),orders:[],ordersExpire:0,
-    lastWords:[],history:[],sales:[],badges:[],daily:{day:'',answers:{},correct:0},weekly:{week:'',answers:{},correct:0},
+    lastWords:[],history:[],sales:[],badges:[],farmCorrectTotal:0,daily:{day:'',answers:{},correct:0},weekly:{week:'',answers:{},correct:0},
     position:{x:880,y:495},settings:{fastDemo:false},savedAt:Date.now()};
 }
 
@@ -128,30 +135,34 @@ function normalizeOnlineProfile_(saved,id,name){
   const p=JSON.parse(JSON.stringify(saved));
   p.id=id;p.name=name;p.saveSchemaVersion=1;
   for(const k of ['companions','discovered','fences','decorations']) if(p[k]===undefined)p[k]=[];
+  for(const k of ['history','sales','badges','lastWords','orders']) if(p[k]===undefined)p[k]=[];
   for(const k of ['seeds','harvest','decorStock']) if(p[k]===undefined)p[k]={};
   if(p.fenceStock===undefined)p.fenceStock=0;
   if(p.specialSeedLastPurchase===undefined)p.specialSeedLastPurchase='';
   if(p.xpTotal===undefined)p.xpTotal=Number(p.xp)||0;
+  if(p.farmCorrectTotal===undefined)p.farmCorrectTotal=p.history.filter(x=>x.source==='Farm'&&x.correct).length;
   if(p.settings===undefined)p.settings={fastDemo:false};
   return p;
 }
 
 function readProgress_(ss,id,name){
- const sh=tab_(ss,PROGRESS_TAB),data=sh.getDataRange().getValues();
- for(let i=1;i<data.length;i++)if(String(data[i][0]).padStart(2,'0')===id){
+ const sh=tab_(ss,PROGRESS_TAB),last=sh.getLastRow(),data=last>1?sh.getRange(2,1,last-1,5).getValues():[];
+ for(let i=0;i<data.length;i++)if(String(data[i][0]).padStart(2,'0')===id){
   const profile=JSON.parse(String(data[i][2]||'{}'));
   const migrated=normalizeOnlineProfile_(profile,id,name);delete migrated.landTax;
-  return {row:i+1,revision:Number(data[i][1])||0,profile:migrated,seen:JSON.parse(String(data[i][4]||'[]'))};
+  return {row:i+2,revision:Number(data[i][1])||0,profile:migrated,seen:JSON.parse(String(data[i][4]||'[]'))};
  }
  return {row:null,revision:0,profile:freshProfile_(id,name),seen:[]};
 }
 
 function studentLogin(loginNumber,pin){
- if(!canonicalLoginNumber_(loginNumber)||!/^\d{4}$/.test(String(pin)))throw Error('Enter your student number and four-digit passcode.');
- const ss=data_(),acSheet=tab_(ss,ACCOUNTS_TAB),acct=findAccountByLoginNumber_(acSheet,loginNumber),id=acct.id,v=acct.v;
+ if(!canonicalLoginNumber_(loginNumber)||!/^(?:\d{4}|\d{6})$/.test(String(pin)))throw Error('Enter your student number and passcode.');
+ const ss=data_(),acSheet=tab_(ss,ACCOUNTS_TAB),acct=findAccountByLoginNumber_(acSheet,loginNumber),id=acct.id;
  const lock=LockService.getScriptLock();lock.waitLock(15000);
+ let accountName,accountVersion;
  try{
-  const latest=findAccount_(acSheet,id).v;
+  const latest=acSheet.getRange(acct.row,1,1,9).getValues()[0];
+  if(canonicalLoginNumber_(latest[8]===undefined||String(latest[8]).trim()===''?id:latest[8])!==canonicalLoginNumber_(loginNumber))throw Error('Student number changed. Please try again.');
   if(Number(latest[5])>Date.now())throw Error('Too many wrong codes. Try again after 15 minutes.');
   if(hashPin_(String(latest[2]),String(pin))!==String(latest[3])){
    const failed=Number(latest[4]||0)+1;
@@ -159,15 +170,21 @@ function studentLogin(loginNumber,pin){
    throw Error('Incorrect passcode. You can ask your teacher to reset it.');
   }
   acSheet.getRange(acct.row,5,1,2).setValues([[0,0]]);
+  accountName=String(latest[1]);accountVersion=String(latest[6]);
  }finally{lock.releaseLock();}
- const prof=readProgress_(ss,id,String(v[1]));
+ const prof=readProgress_(ss,id,accountName);
  const session=Utilities.getUuid()+Utilities.getUuid();
- CacheService.getScriptCache().put(sessionKey_(session),id+'|'+String(v[6]),SESSION_TTL);
- return {session,revision:prof.revision,profile:prof.profile,words:readWords_(ss,id),testMode:id===TEACHER_TEST_ID};
+ CacheService.getScriptCache().put(sessionKey_(session),id+'|'+accountVersion,SESSION_TTL);
+ return {session,revision:prof.revision,profile:prof.profile,words:readWords_(ss,id,true),testMode:id===TEACHER_TEST_ID};
+}
+
+function studentLogout(session){
+ if(typeof session==='string'&&session.length>=45)CacheService.getScriptCache().remove(sessionKey_(session));
+ return {ok:true};
 }
 
 function studentWords(session){
- const user=requireSession_(session);return {name:user.name,words:readWords_(data_(),user.id)};
+ const user=requireSession_(session);return {name:user.name,words:readWords_(data_(),user.id,true)};
 }
 
 function verifyProfile_(profile,id){
@@ -182,86 +199,51 @@ function verifyProfile_(profile,id){
  if(JSON.stringify(profile).length>49000)throw Error('Saved state is too large. Please contact the teacher.');
  return profile;
 }
-function prepareStudentSave_(ss,user,p,profileJson,events){
- const id=user.id;
+function prepareStudentSave_(ss,user,p,profileJson,events,actions){
  if(typeof profileJson!=='string'||profileJson.length>49000)throw Error('Save is too large.');
- const proposed=verifyProfile_(JSON.parse(profileJson),id);proposed.name=user.name;
-  if(id!==TEACHER_TEST_ID&&Number(proposed.settings?.testGrowthSeconds||0)!==0)throw Error('Test growth settings are unavailable for student profiles.');
-  // These fields may only be changed by the two authenticated server methods.
-  if(String(proposed.specialSeedLastPurchase||'')!==String(p.profile.specialSeedLastPurchase||''))throw Error('Special Seed purchase must be confirmed by the server.');
-  if(Number(proposed.seeds.special||0)>Number(p.profile.seeds?.special||0))throw Error('Unconfirmed Special Seed inventory increase.');
-  for(let i=0;i<10;i++){
-   const before=p.profile.plots?.[i]?.crop,after=proposed.plots?.[i]?.crop;
-   if(after?.type==='special'&&after.characterId){
-    if(!before||before.type!=='special'||before.characterId!==after.characterId||Number(before.rarity)!==Number(after.rarity))throw Error('Unconfirmed companion identity or rarity change.');
-   }
-  }
-  // Planting must consume server-recorded Special Seed stock, including if
-  // the student plants multiple plots before the next automatic save.
-  const newPlantings=proposed.plots.reduce((n,slot,i)=>n+(slot.crop?.type==='special'&&p.profile.plots?.[i]?.crop?.type!=='special'?1:0),0);
-  if(newPlantings>Number(p.profile.seeds?.special||0)-Number(proposed.seeds.special||0))throw Error('Special Seed planting requires owned inventory.');
-  const oldPets=new Map((p.profile.companions||[]).map(x=>[String(x.id),x]));
-  const newPets=(proposed.companions||[]).filter(x=>!oldPets.has(String(x.id)));
-  for(const pet of proposed.companions||[]){const old=oldPets.get(String(pet.id));if(old&&(old.characterId!==pet.characterId||Number(old.rarity)!==Number(pet.rarity)))throw Error('Companion identity or rarity cannot be edited.');}
-  const availableHarvests=p.profile.plots.map((x,i)=>({i,c:x.crop})).filter(x=>x.c?.type==='special'&&x.c.stage===4);
-  for(const pet of newPets){
-   const matching=availableHarvests.findIndex(x=>x.c.characterId===pet.characterId&&Number(x.c.rarity)===Number(pet.rarity)&&Number(x.c.nextDueAt||0)<=Date.now()&&!proposed.plots?.[x.i]?.crop);
-   if(matching<0)throw Error('No ready, harvested Special Seed supports this companion.');
-   availableHarvests.splice(matching,1); // one harvested plot cannot mint multiple pets
-  }
-  const seen=new Set(p.seen||[]);
-  const submitted=Array.isArray(events)?events.slice(0,75):[];
-  const dict={};if(submitted.length)for(const w of readWords_(ss,id))dict[w.id]=w;
-  const toSave=[];
-  for(const e of submitted){
-   if(!e||!/^ev_[\w-]{8,}$/.test(String(e.eventId||''))||seen.has(e.eventId))continue;
-   seen.add(e.eventId);
-   // Verify the submitted answer against the teacher's current word sheet.
-   // This improves log accuracy but is not an anti-cheat/secure-exam solution.
-   const w=dict[String(e.wordId)];const stage=String(e.stage||'');
-   const answer=String(e.answer||'').trim(),normalize=x=>String(x||'').trim().toLowerCase();
-   const expected=w?((e.source==='Daily challenge'||e.source==='Weekly challenge'||stage==='Tend'||stage==='English → Vietnamese')?w.meaning:stage==='Water'?w.pos:w.english):String(e.expected||'');
-   const result=w?(normalize(answer)===normalize(expected)?'Correct':'Wrong'):'Unverified';
-   toSave.push([e.eventId,new Date(Number(e.time)||Date.now()),id,user.name,
-      String(e.source||'').slice(0,48),stage.slice(0,48),
-      String(w?`${w.english} (${w.pos})`:(e.word||'')).slice(0,120),answer.slice(0,200),
-      String(expected).slice(0,200),result,
-      Math.max(1,Math.min(100,Number(e.attempt)||1))]);
-  }
-  return {profile:proposed,seen:Array.from(seen).slice(-300),toSave};
+ const proposed=verifyProfile_(JSON.parse(profileJson),user.id),list=Array.isArray(actions)?actions:[];
+ const words=list.some(x=>['plant','challenge'].includes(x?.type))?readWords_(ss,user.id):[];
+ const replay=secureReplay_(p.profile,proposed,list,words,user.id,p.seen||[],Date.now());
+ const rows=replay.logs.map(log=>[log.id,new Date(),user.id,user.name,log.source,log.stage,log.word.english+' ('+log.word.pos+')',log.answer.slice(0,200),String(log.expected).slice(0,200),log.correct?'Correct':'Wrong',log.attempt]);
+ return {profile:replay.profile,seen:replay.seen,toSave:rows};
 }
 function commitStudentProgress_(ss,user,p,prepared){
-  if(prepared.toSave.length){const history=tab_(ss,HISTORY_TAB);history.getRange(history.getLastRow()+1,1,prepared.toSave.length,11).setValues(prepared.toSave);}
+  let appended=0;
+  if(prepared.toSave.length){
+    const history=tab_(ss,HISTORY_TAB),last=history.getLastRow();
+    // A retry after a failed progress write must not duplicate answer rows.
+    const start=Math.max(2,last-499),ids=new Set(last>1?history.getRange(start,1,last-start+1,1).getValues().map(row=>String(row[0])):[]);
+    const missing=prepared.toSave.filter(row=>!ids.has(row[0]));
+    if(missing.length){history.getRange(last+1,1,missing.length,11).setValues(missing);appended=missing.length;}
+  }
   const rec=[user.id,p.revision+1,JSON.stringify(prepared.profile),new Date(),JSON.stringify(prepared.seen)];
   const progressSheet=tab_(ss,PROGRESS_TAB);
   if(p.row)progressSheet.getRange(p.row,1,1,5).setValues([rec]);
   else progressSheet.appendRow(rec);
-  return {ok:true,revision:p.revision+1,logged:prepared.toSave.length};
+  return {ok:true,revision:p.revision+1,logged:appended};
 }
-function studentSave(session,profileJson,events,expectedRevision){
- const ss=data_(),lock=LockService.getScriptLock();lock.waitLock(20000);
+function studentSave(session,profileJson,events,expectedRevision,actions){
+ const started=Date.now(),ss=data_(),lock=LockService.getScriptLock();lock.waitLock(20000);
  try{
   const user=requireSession_(session);
   const p=readProgress_(ss,user.id,user.name);
-  if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
-  return commitStudentProgress_(ss,user,p,prepareStudentSave_(ss,user,p,profileJson,events));
+  const readMs=Date.now()-started;
+  let prepared;
+  try{prepared=prepareStudentSave_(ss,user,p,profileJson,events,actions);}
+  catch(error){console.warn('Rejected student save for '+user.id+': '+error);return {rejected:true,revision:p.revision};}
+  const prepareMs=Date.now()-started-readMs;
+  const result=commitStudentProgress_(ss,user,p,prepared);result.profile=prepared.profile;
+  result.timing={readMs,prepareMs,commitMs:Date.now()-started-readMs-prepareMs,totalMs:Date.now()-started};return result;
  }finally{lock.releaseLock();}
 }
 
 
-/** Server decisions for the online Special Seed. This ledger is separate from
- * client-submitted progress and is only written by server methods. The rest of
- * the game economy is still a trust-based classroom prototype. */
+/** Server decisions for the online Special Seed. The ledger is an audit trail. */
 function magicDay_(){return Utilities.formatDate(new Date(),'Asia/Ho_Chi_Minh','yyyy-MM-dd');}
 function magicLedger_(ss){
  let sh=ss.getSheetByName(MAGIC_LEDGER_TAB);
  if(!sh){sh=ss.insertSheet(MAGIC_LEDGER_TAB);sh.appendRow(['Time','Student ID','Type','Vietnam day','Plot','Character','Rarity','Revision']);sh.setFrozenRows(1);}
  return sh;
-}
-function hasMagicPurchase_(sh,id,day){
- const rows=sh.getDataRange().getValues();
- for(let i=rows.length-1;i>=1;i--){const r=rows[i];const recordedDay=r[3] instanceof Date?Utilities.formatDate(r[3],'Asia/Ho_Chi_Minh','yyyy-MM-dd'):String(r[3]).slice(0,10);if(String(r[1]).padStart(2,'0')===id&&String(r[2])==='purchase'&&recordedDay===day)return true;}
- return false;
 }
 function writeMagicProgress_(ss,p,id,profile){
  const row=[id,p.revision+1,JSON.stringify(profile),new Date(),JSON.stringify(p.seen||[])];
@@ -300,7 +282,7 @@ function studentTestAction(session,action,value,expectedRevision){
   return {ok:true,revision,profile};
  }finally{lock.releaseLock();}
 }
-function studentSpecialBuy(session,expectedRevision,profileJson,events){
+function studentSpecialBuy(session,expectedRevision,profileJson,events,actions){
  const started=Date.now();
  const ss=data_();
  const openMs=Date.now()-started;
@@ -311,7 +293,9 @@ function studentSpecialBuy(session,expectedRevision,profileJson,events){
   const p=readProgress_(ss,user.id,user.name);
   const readMs=Date.now()-started-openMs-lockAndSessionMs;
   if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
-  const prepared=typeof profileJson==='string'?prepareStudentSave_(ss,user,p,profileJson,events):null;
+  let prepared=null;
+  try{if(typeof profileJson==='string')prepared=prepareStudentSave_(ss,user,p,profileJson,events,actions);}
+  catch(error){console.warn('Rejected Special Seed purchase for '+user.id+': '+error);return {rejected:true,revision:p.revision};}
   const prepareMs=Date.now()-started-openMs-lockAndSessionMs-readMs;
   const day=magicDay_(),profile=prepared?prepared.profile:p.profile;
   if(profile.version!==2||Number(profile.level)<5||Number(profile.gold)<MAGIC_COST)throw Error('Level 5 and 300 gold are required.');
@@ -326,10 +310,10 @@ function studentSpecialBuy(session,expectedRevision,profileJson,events){
   const commitMs=Date.now()-started-openMs-lockAndSessionMs-readMs-prepareMs;
   try{ledger.appendRow([new Date(),user.id,'purchase',day,'','',0,rev]);}
   catch(error){console.error('Special Seed purchase saved at revision '+rev+'; ledger append failed: '+error);}
-  return {ok:true,revision:rev,day,gold:profile.gold,specialSeeds:profile.seeds.special,logged:saved?saved.logged:0,timing:{openMs,lockAndSessionMs,readMs,prepareMs,commitMs,totalMs:Date.now()-started}};
+  return {ok:true,revision:rev,day,gold:profile.gold,specialSeeds:profile.seeds.special,profile,logged:saved?saved.logged:0,timing:{openMs,lockAndSessionMs,readMs,prepareMs,commitMs,totalMs:Date.now()-started}};
  }finally{lock.releaseLock();}
 }
-function studentSpecialReveal(session,plotIndex,expectedRevision,profileJson,events){
+function studentSpecialReveal(session,plotIndex,expectedRevision,profileJson,events,actions){
  const started=Date.now();
  const ss=data_(),idx=Number(plotIndex);
  const openMs=Date.now()-started;
@@ -341,7 +325,9 @@ function studentSpecialReveal(session,plotIndex,expectedRevision,profileJson,eve
   const p=readProgress_(ss,user.id,user.name);
   const readMs=Date.now()-started-openMs-lockAndSessionMs;
   if(Number(expectedRevision)!==p.revision)return {conflict:true,revision:p.revision};
-  const prepared=typeof profileJson==='string'?prepareStudentSave_(ss,user,p,profileJson,events):null;
+  let prepared=null;
+  try{if(typeof profileJson==='string')prepared=prepareStudentSave_(ss,user,p,profileJson,events,actions);}
+  catch(error){console.warn('Rejected Special Seed reveal for '+user.id+': '+error);return {rejected:true,revision:p.revision};}
   const prepareMs=Date.now()-started-openMs-lockAndSessionMs-readMs;
   const profile=prepared?prepared.profile:p.profile;
   const crop=profile.plots?.[idx]?.crop;
@@ -361,6 +347,6 @@ function studentSpecialReveal(session,plotIndex,expectedRevision,profileJson,eve
   const commitMs=Date.now()-started-openMs-lockAndSessionMs-readMs-prepareMs;
   try{ledger.appendRow([new Date(),user.id,'reveal',magicDay_(),idx+1,crop.characterId,crop.rarity,rev]);}
   catch(error){console.error('Special Seed reveal saved at revision '+rev+'; ledger append failed: '+error);}
-  return {ok:true,revision:rev,crop,logged:saved?saved.logged:0,timing:{openMs,lockAndSessionMs,readMs,prepareMs,commitMs,totalMs:Date.now()-started}};
+  return {ok:true,revision:rev,crop,profile,logged:saved?saved.logged:0,timing:{openMs,lockAndSessionMs,readMs,prepareMs,commitMs,totalMs:Date.now()-started}};
  }finally{lock.releaseLock();}
 }

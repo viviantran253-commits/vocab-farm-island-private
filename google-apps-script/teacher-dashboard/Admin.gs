@@ -45,6 +45,7 @@ function requireTeacher_(token){
  if(!token||CacheService.getUserCache().get('teacher_auth_'+sha_('vfi_teacher',String(token)))!==(PropertiesService.getScriptProperties().getProperty(TEACHER_VERSION_KEY)||'initial'))throw Error('Teacher session expired. Re-enter your PIN.');
 }
 function createSheet_(ss,name,header){let s=ss.getSheetByName(name);if(!s){s=ss.insertSheet(name);s.appendRow(header);s.setFrozenRows(1);s.getRange(1,1,1,header.length).setFontWeight('bold').setBackground('#e3f1d9');}return s;}
+function newStudentPin_(){return String(100000+(parseInt(Utilities.getUuid().replace(/-/g,'').slice(0,12),16)%900000));}
 function sha_(salt,pin){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,salt+':'+pin).map(x=>('0'+((x+256)%256).toString(16)).slice(-2)).join('');}
 function ensureLoginNumbers_(accounts){
  if(String(accounts.getRange(1,9).getValue()).trim()!=='Login number')accounts.getRange(1,9).setValue('Login number');
@@ -67,7 +68,7 @@ function setupVocabFarm(teacherToken){requireTeacher_(teacherToken);
   const vocabulary=createSheet_(ss,'Vocab_'+id,HEADERS);
   vocabulary.setColumnWidths(1,5,170);
   if(!existing.includes(id)){
-   const pin=String(Math.floor(Math.random()*9000)+1000);const salt=Utilities.getUuid();
+   const pin=newStudentPin_(),salt=Utilities.getUuid();
    accounts.appendRow([id,'Student '+id,salt,sha_(salt,pin),0,0,1,new Date(),i]);
    created.push({id,pin});
   }
@@ -96,7 +97,7 @@ function createTeacherTestProfile(teacherToken){
    ['garden','/ˈɡɑː.dən/','n','khu vườn','The garden is green. (Khu vườn xanh.)'],
    ['plant','/plɑːnt/','v','trồng','We plant seeds. (Chúng tôi trồng hạt giống.)']
   ]);
-  const pin=String(Math.floor(Math.random()*9000)+1000),salt=Utilities.getUuid();
+  const pin=newStudentPin_(),salt=Utilities.getUuid();
   accounts.appendRow([TEACHER_TEST_ID,'Teacher Test',salt,sha_(salt,pin),0,0,1,new Date(),11]);
   accounts.hideColumns(3,2);
   return {created:true,id:TEACHER_TEST_ID,pin,message:'Record this private passcode now. It will not be shown again.'};
@@ -115,7 +116,7 @@ function studentSummary(teacherToken){requireTeacher_(teacherToken);
 }
 function studentHistory(teacherToken,id,max){requireTeacher_(teacherToken);id=ensureId_(id);const ss=SpreadsheetApp.getActiveSpreadsheet(),sh=ss.getSheetByName(HISTORY);if(!sh)return [];const rows=sh.getDataRange().getValues().slice(1).filter(r=>String(r[2]).padStart(2,'0')===id);return rows.slice(-Math.min(500,Number(max)||150)).reverse().map(r=>({time:r[1] instanceof Date?r[1].toISOString():String(r[1]),source:String(r[4]),stage:String(r[5]),word:String(r[6]),answer:String(r[7]),expected:String(r[8]),result:String(r[9]),attempt:Number(r[10])||1}));}
 function changeStudentName(teacherToken,id,name){requireTeacher_(teacherToken);id=ensureId_(id);name=String(name||'').trim();if(!name||name.length>28)throw Error('Name must be 1–28 characters.');const ss=SpreadsheetApp.getActiveSpreadsheet(),a=accountRow_(ss,id);a.sheet.getRange(a.row,2).setValue(name);a.sheet.getRange(a.row,8).setValue(new Date());return {id,name};}
-function resetStudentPIN(teacherToken,id,newPin){requireTeacher_(teacherToken);id=ensureId_(id);const pin=newPin?String(newPin):String(Math.floor(Math.random()*9000)+1000);if(!/^\d{4}$/.test(pin))throw Error('Passcode must be exactly four digits.');const ss=SpreadsheetApp.getActiveSpreadsheet(),a=accountRow_(ss,id),salt=Utilities.getUuid();a.sheet.getRange(a.row,3,1,6).setValues([[salt,sha_(salt,pin),0,0,Number(a.values[6]||1)+1,new Date()]]);return {id,pin,message:'Save this code privately. Existing student sessions have been invalidated.'};}
+function resetStudentPIN(teacherToken,id,newPin){requireTeacher_(teacherToken);id=ensureId_(id);const pin=newPin?String(newPin):newStudentPin_();if(!/^\d{6}$/.test(pin))throw Error('New passcodes must be exactly six digits.');const ss=SpreadsheetApp.getActiveSpreadsheet(),a=accountRow_(ss,id),salt=Utilities.getUuid();a.sheet.getRange(a.row,3,1,6).setValues([[salt,sha_(salt,pin),0,0,Number(a.values[6]||1)+1,new Date()]]);return {id,pin,message:'Save this code privately. Existing student sessions have been invalidated.'};}
 
 /** Reset one student's game state and answer log while keeping their name, PIN and vocabulary.
  * The private archive stores the original rows so the teacher can recover them manually.
@@ -141,12 +142,12 @@ function resetStudentProgress(teacherToken,id,typedId){
  for(const entry of oldMagic)archived.push([resetId,resetAt,id,name,'_MagicLedger',entry.row,...entry.values,...Array(11-entry.values.length).fill('')]);
  if(!archived.length)archived.push([resetId,resetAt,id,name,'No previous progress',0,...Array(11).fill('')]);
  for(let i=0;i<archived.length;i+=200)archive.getRange(archive.getLastRow()+1,1,Math.min(200,archived.length-i),17).setValues(archived.slice(i,i+200));
- // Invalidate open student sessions without changing the four-digit passcode.
+ // Invalidate open student sessions without changing the passcode.
  account.sheet.getRange(account.row,7,1,2).setValues([[Number(account.values[6]||1)+1,resetAt]]);
  const fresh={version:2,saveSchemaVersion:1,id,name,gold:30,level:1,xp:0,xpTotal:0,seeds:{carrot:2},harvest:{},
    companions:[],discovered:[],fences:[],fenceStock:0,decorations:[],decorStock:{},specialSeedLastPurchase:'',
    plots:Array.from({length:10},(_,i)=>({unlocked:i<2,crop:null})),orders:[],ordersExpire:0,
-   lastWords:[],history:[],sales:[],badges:[],daily:{day:'',answers:{},correct:0},weekly:{week:'',answers:{},correct:0},
+   lastWords:[],history:[],sales:[],badges:[],farmCorrectTotal:0,daily:{day:'',answers:{},correct:0},weekly:{week:'',answers:{},correct:0},
    position:{x:880,y:495},settings:{fastDemo:false},savedAt:Date.now()};
  const record=[id,oldRevision+1,JSON.stringify(fresh),resetAt,'[]'];
  if(progressRow)progress.getRange(progressRow,1,1,5).setValues([record]);else progress.appendRow(record);

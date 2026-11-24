@@ -30,7 +30,7 @@ test('teacher creates an isolated profile once, without changing students', () =
   const context = vm.createContext({
     SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: name => sheets[name] }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-    Utilities: { getUuid: () => 'new-salt' },
+    Utilities: { getUuid: () => '12345678-1234-1234-1234-123456789abc' },
   });
   vm.runInContext(fs.readFileSync('google-apps-script/teacher-dashboard/Admin.gs', 'utf8'), context);
   context.requireTeacher_ = token => { if (token !== 'teacher-token') throw Error('Teacher session required.'); };
@@ -39,7 +39,7 @@ test('teacher creates an isolated profile once, without changing students', () =
   const result = context.createTeacherTestProfile('teacher-token');
   assert.equal(result.created, true);
   assert.equal(result.id, '11');
-  assert.match(result.pin, /^\d{4}$/);
+  assert.match(result.pin, /^\d{6}$/);
   assert.equal(sheets._Students.rows[1][1], 'Student 01');
   assert.equal(sheets._Students.rows[2][0], '11');
   assert.equal(sheets._Students.rows[2][3], 'hashed-pin');
