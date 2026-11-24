@@ -1856,7 +1856,14 @@ function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el
 }
 function frame(t){if(!playing)return;if(actionMotion)advanceFarmAction(t);const dt=Math.min(.055,(t-lastTime)/1000||0);lastTime=t;if($('modalOverlay').classList.contains('hidden'))updateMovement(dt);updateCompanions(dt);renderWorld();
  if(t-uiLast>450){const reset=syncDaily();if(reset&&activeModal==='missions')showMissions();updateHUD();liveCounters();uiLast=t;}
- if(t-saveLast>(ONLINE?18000:2500)){save();if(ONLINE)flushOnline();saveLast=t;}
+ if(t-saveLast>(ONLINE?18000:2500)){
+  if(ONLINE){
+   const x=Math.round(player.x),y=Math.round(player.y);
+   if(state.position?.x!==x||state.position?.y!==y)save();
+   if(onlineDirty)void flushOnline();
+  }else save();
+  saveLast=t;
+ }
  requestAnimationFrame(frame);}
 async function reloadOnlineWords(){if(!ONLINE||!onlineToken)return;
  try{const info=await serverCall('studentWords',onlineToken);bank=info.words||[];if(info.name){state.name=info.name;updateHUD();}toast(`Vocabulary updated: ${bank.length} words.`);showHistory();}
