@@ -220,19 +220,22 @@ const POS_LABELS={
  'n.phr':'Cụm danh từ (n. phr.)','v.phr':'Cụm động từ (v. phr.)',
  'adj.phr':'Cụm tính từ (adj. phr.)','adv.phr':'Cụm trạng từ (adv. phr.)',
  phrasal:'Động từ kết hợp tiểu từ (phrasal verb)',idiom:'Thành ngữ (idiom)',
- collocation:'Kết hợp từ (collocation)','n/v':'Danh từ hoặc động từ (n/v)'
+ collocation:'Kết hợp từ (collocation)','n/v':'Danh từ hoặc động từ (n/v)',
+ 'v/n':'Động từ hoặc danh từ (v/n)',conj:'Liên từ (conj.)'
 };
 const POS_NEIGHBORS={n:['n.phr','v','adj'],v:['v.phr','phrasal','n'],adj:['adj.phr','adv','n'],adv:['adv.phr','adj','v'],
  'n.phr':['n','v.phr','collocation'],'v.phr':['v','phrasal','collocation'],
  'adj.phr':['adj','n.phr','collocation'],'adv.phr':['adv','v.phr','collocation'],
  phrasal:['v.phr','v','idiom'],idiom:['collocation','phrasal','v.phr'],
- collocation:['idiom','n.phr','v.phr'],'n/v':['n','v','n.phr']};
+ collocation:['idiom','n.phr','v.phr'],'n/v':['n','v','n.phr'],
+ 'v/n':['v','n','v.phr'],conj:['adv','v.phr','n.phr']};
 function canonicalPOS(raw,english=''){
- const key=String(raw||'').trim().toLowerCase().replace(/[().\s_-]+/g,'');
+ const key=String(raw||'').trim().toLowerCase().replace(/[().\s_/-]+/g,'');
  const codes={n:'n',noun:'n',v:'v',verb:'v',adj:'adj',adjective:'adj',adv:'adv',adverb:'adv',
   nphr:'n.phr',nounphrase:'n.phr',vphr:'v.phr',verbphrase:'v.phr',phrv:'v.phr',phr:'v.phr',
   adjphr:'adj.phr',adjectivephrase:'adj.phr',advphr:'adv.phr',adverbphrase:'adv.phr',
-  phrasalverb:'phrasal',phrasal:'phrasal',idiom:'idiom',collocation:'collocation',nv:'n/v'};
+  phrasalverb:'phrasal',phrasal:'phrasal',idiom:'idiom',collocation:'collocation',nv:'n/v',vn:'v/n',
+  conj:'conj',conjunction:'conj'};
  const pos=codes[key]||null;
  return String(english).trim().toLowerCase()==='focus on'&&pos==='v'?'v.phr':pos;
 }

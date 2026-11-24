@@ -84,11 +84,12 @@ function requireSession_(token) {
 }
 
 function canonicalWordPos_(raw,english){
- const key=String(raw||'').trim().toLowerCase().replace(/[().\s_-]+/g,'');
+ const key=String(raw||'').trim().toLowerCase().replace(/[().\s_/-]+/g,'');
  const labels={n:'n',noun:'n',v:'v',verb:'v',adj:'adj',adjective:'adj',adv:'adv',adverb:'adv',
   nphr:'n.phr',nounphrase:'n.phr',vphr:'v.phr',verbphrase:'v.phr',phrv:'v.phr',phr:'v.phr',
   adjphr:'adj.phr',adjectivephrase:'adj.phr',advphr:'adv.phr',adverbphrase:'adv.phr',
-  phrasalverb:'phrasal',phrasal:'phrasal',idiom:'idiom',collocation:'collocation',nv:'n/v'};
+  phrasalverb:'phrasal',phrasal:'phrasal',idiom:'idiom',collocation:'collocation',nv:'n/v',vn:'v/n',
+  conj:'conj',conjunction:'conj'};
  const pos=labels[key]||null;
  return String(english||'').trim().toLowerCase()==='focus on'&&pos==='v'?'v.phr':pos;
 }
@@ -101,7 +102,8 @@ function readWords_(ss,id) {
     const pos=canonicalWordPos_(pos0,en);
     if(!en||!ipa||!meaning||!example||!pos)continue;
     // Preserve IDs from older saves when a legacy phrase label is displayed correctly.
-    const legacyPos=pos==='v.phr'?'v':pos==='n/v'?'n':pos.replace(/\W+/g,'');
+    const legacyPos=pos==='v.phr'||pos==='phrasal'||(pos==='collocation'&&en.toLowerCase()==='make a decision')?'v':
+      pos==='n.phr'&&en.toLowerCase()==='communal house'?'n':pos==='n/v'?'n':pos==='v/n'?'v':pos.replace(/\W+/g,'');
     const key='sheet_'+id+'_'+en.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_'+legacyPos;
     if(taken[key])continue; taken[key]=true;
     out.push({id:key,english:en,ipa,pos,meaning,example});
