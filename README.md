@@ -29,6 +29,7 @@ Students type their number and private four-digit passcode on the login page. In
 - [v0.30 staging](staging/v0.30/README.md) remains as the previous source reference and rollback asset set.
 - `google-apps-script/student-app/` contains the live web app source. After editing it, copy changed files into the Apps Script project and **deploy a new version of the existing web app deployment**.
 - `google-apps-script/teacher-dashboard/` contains the separate Sheet-bound teacher dashboard source.
+- Both Apps Script folders include their deployment manifest. The private `SHEET_ID`, `ASSET_BASE_URL`, passcodes, and Google credentials remain in Google or the teacher's private Sheet and are not in this source archive.
 - `game.js`, `style.css`, and `map-config.js` power the older `demo.html` only. The official game uses `google-apps-script/student-app/`.
 - `FINAL_SETUP_GOOGLE_SHEETS_GITHUB.md` is a setup guide for a fresh installation. This repository is already connected and deployed.
 
