@@ -205,6 +205,11 @@ function normalizeOnlineProfile_(saved,id,name){
   if(p.xpTotal===undefined)p.xpTotal=Number(p.xp)||0;
   if(p.farmCorrectTotal===undefined)p.farmCorrectTotal=p.history.filter(x=>x.source==='Farm'&&x.correct).length;
   if(p.settings===undefined)p.settings={fastDemo:false};
+  // Rudo's catalog ID changed with the updated art. Carry existing pets,
+  // discoveries, and unharvested Special Seeds forward without resetting progress.
+  for(const pet of p.companions)if(pet?.characterId==='rudo')pet.characterId='rudo_surebrec';
+  p.discovered=[...new Set(p.discovered.map(characterId=>characterId==='rudo'?'rudo_surebrec':characterId))];
+  for(const plot of p.plots)if(plot?.crop?.characterId==='rudo')plot.crop.characterId='rudo_surebrec';
   return p;
 }
 

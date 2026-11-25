@@ -36,3 +36,21 @@ test('the baseline catalog keeps login usable when GitHub is unavailable',()=>{
  assert.equal(result.source,'fallback');
  assert.equal(result.characters.length,22);
 });
+
+test('renaming Rudo preserves owned pets, discoveries, and growing Special Seeds',()=>{
+ const c=vm.createContext({});
+ vm.runInContext(fs.readFileSync('google-apps-script/student-app/Server.gs','utf8'),c);
+ const saved=c.freshProfile_('11','Teacher Test');
+ saved.gold=900;saved.level=12;
+ saved.companions=[{id:'pet-1',characterId:'rudo',rarity:3,x:90,y:100}];
+ saved.discovered=['rudo','rudo_surebrec'];
+ saved.plots[0].crop={type:'special',stage:2,characterId:'rudo',rarity:3};
+ const migrated=c.normalizeOnlineProfile_(saved,'11','Teacher Test');
+ assert.equal(migrated.companions[0].characterId,'rudo_surebrec');
+ assert.deepEqual([...migrated.discovered],['rudo_surebrec']);
+ assert.equal(migrated.plots[0].crop.characterId,'rudo_surebrec');
+ assert.equal(migrated.gold,900);
+ assert.equal(migrated.level,12);
+ assert.equal(saved.companions[0].characterId,'rudo');
+ assert.deepEqual([...c.normalizeOnlineProfile_(migrated,'11','Teacher Test').discovered],['rudo_surebrec']);
+});

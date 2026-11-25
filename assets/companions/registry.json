@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "assetVersion": "2026-11-25-2",
+  "assetVersion": "2026-11-25-3",
   "characters": [
     {
       "id": "itadori_yuji",
@@ -123,8 +123,8 @@
       "portrait": true
     },
     {
-      "id": "rudo",
-      "name": "Rudo",
+      "id": "rudo_surebrec",
+      "name": "Rudo Surebrec",
       "enabled": true,
       "phrases": [
         {

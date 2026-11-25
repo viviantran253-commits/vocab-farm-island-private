@@ -6,3 +6,12 @@ const action=(id,type,data)=>({id:'act_'+id.padEnd(16,'x'),type,data});
 test('Special Seed purchase ignores forged gold and saves one charge',()=>{const {c,sheets,stored}=game(profile()),fake=structuredClone(stored.profile);fake.gold=900000;fake.seeds.special=100;const r=c.studentSpecialBuy('session',4,JSON.stringify(fake),[],[]);assert.equal(r.gold,700);assert.equal(r.specialSeeds,2);assert.equal(stored.profile.gold,700);assert.equal(sheets._Progress.writes,1);assert.equal(sheets._MagicLedger.writes,1);assert.equal(c.studentSpecialBuy('session',4,JSON.stringify(fake),[],[]).conflict,true);});
 test('Special Seed reveal uses the live registry after a verified Water action',()=>{const initial=profile();initial.seeds.special=0;initial.plots[0].crop={type:'special',stage:0,wordId:word.id,wordData:word,nextDueAt:Date.now()-1000,retryAfter:0,wrong:0};const {c,stored}=game(initial),fake=structuredClone(initial);fake.plots[0].crop.pendingReveal=true;const a=action('water','answer',{plot:0,answer:'n'});const r=c.studentSpecialReveal('session',0,4,JSON.stringify(fake),[],[a]);assert.equal(r.ok,true);assert.equal(r.crop.stage,1);assert.equal(r.crop.characterId,'new_character');assert.equal(stored.profile.seeds.special,0);});
 test('a reveal without a valid pending crop cannot mint a companion',()=>{const {c,sheets,stored}=game(profile()),fake=structuredClone(stored.profile);fake.plots[0].crop={type:'special',stage:0,pendingReveal:true};assert.throws(()=>c.studentSpecialReveal('session',0,4,JSON.stringify(fake),[],[]),/does not contain a Special Seed/);assert.equal(sheets._Progress.writes,0);});
+test('an open pre-rename session can harvest Rudo under the new catalog ID',()=>{
+ const initial=profile();initial.plots[0].crop={type:'special',stage:4,characterId:'rudo_surebrec',rarity:2,nextDueAt:Date.now()-1000};
+ const {c}=game(initial),proposed=structuredClone(initial);
+ proposed.companions.push({id:'pet-rudo-1',characterId:'rudo',rarity:2,x:800,y:500});
+ const result=c.secureReplay_(initial,proposed,[action('legacy-rudo','harvest-special',{plot:0,petId:'pet-rudo-1'})],[], '11',[],Date.now());
+ assert.equal(result.profile.companions[0].characterId,'rudo_surebrec');
+ assert.equal(result.profile.discovered[0],'rudo_surebrec');
+ assert.equal(result.profile.plots[0].crop,null);
+});
