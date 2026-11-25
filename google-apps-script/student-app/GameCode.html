@@ -211,6 +211,7 @@ let bank=[...SAMPLE_WORDS];
 let state=null;
 let playing=false;
 let activeModal='';
+let farmCooldownHideTimer=null;
 let qContext=null;
 let modalAction=null;
 let images={};
@@ -298,7 +299,7 @@ function makeHistoryId(){return 'ev_'+now()+'_'+Math.random().toString(36).slice
 function recordOnlineAction(type,data={}){if(ONLINE&&onlineToken)onlinePendingActions.push({id:'act_'+now()+'_'+Math.random().toString(36).slice(2,14),type,data});}
 function stopOnlineSession(message){
  const token=onlineToken;onlineToken=null;onlineDirty=false;onlinePendingActions=[];onlinePendingEvents=[];
- clearTimeout(onlineSaveTimer);closeModal();playing=false;
+ clearTimeout(onlineSaveTimer);closeModal();hideFarmCooldown();playing=false;
  $('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
  $('loginError').textContent=message;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');
  if(token)void serverCall('studentLogout',token).catch(()=>{});
@@ -667,6 +668,16 @@ function updateHUD(){if(!state)return;$('hudName').textContent=state.name;$('hud
  $('hudXPLabel').textContent=`${state.xp} / ${xpNeed(state.level)}`;$('hudXPBar').style.width=(100*state.xp/xpNeed(state.level))+'%';
  $('areaName').textContent=player.x>1515?'Seed Shop Island':'Main Farm Island';}
 function toast(msg,bad=false){const el=document.createElement('div');el.className='toast'+(bad?' bad':'');el.textContent=msg;$('toastStack').append(el);setTimeout(()=>el.remove(),4100)}
+function hideFarmCooldown(){clearTimeout(farmCooldownHideTimer);farmCooldownHideTimer=null;$('farmCooldown').classList.add('hidden');delete $('farmCooldown').dataset.index;}
+function updateFarmCooldown(){const banner=$('farmCooldown');if(banner.classList.contains('hidden'))return;
+ const crop=state?.plots[Number(banner.dataset.index)]?.crop,left=Number(crop?.retryAfter||0)-now();
+ $('farmCooldownTime').textContent=formatSeconds(left);
+ if(left<=0&&!farmCooldownHideTimer)farmCooldownHideTimer=setTimeout(hideFarmCooldown,300);
+}
+function showFarmCooldown(index){const crop=state?.plots[index]?.crop;if(!crop||crop.retryAfter<=now())return;
+ clearTimeout(farmCooldownHideTimer);farmCooldownHideTimer=null;
+ const banner=$('farmCooldown');banner.dataset.index=String(index);banner.classList.remove('hidden');updateFarmCooldown();
+}
 
 // --------------------------- Interface ---------------------------
 function openModal(title,html,kicker='VOCAB FARM ISLAND',id='generic'){
@@ -924,8 +935,8 @@ function showPlot(i){const p=state.plots[i],assetPreview=plotArt(i);if(!p.unlock
  if(!p.crop){return openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img('assets/plots/plot_tilled.png')}<div><h3>Choose a seed</h3></div></div><h3 class="section-heading">Your available seeds</h3><div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><small>Owned: ${state.seeds[c.id]||0}</small><span class="subtext">${c.mins} min total</span><button class="primary-btn" data-do="plant" data-index="${i}" data-crop="${c.id}" ${!(state.seeds[c.id]>0)?'disabled':''}>Plant seed</button></div>`).join('')}</div><h3 class="section-heading">Special Seed</h3><div class="item-card">${img(specialSeedArt)}<strong>Magical character seed</strong><small>Owned: ${state.seeds.special||0} · Four care questions</small><button class="primary-btn" data-do="plant-special" data-index="${i}" ${!(state.seeds.special>0)?'disabled':''}>Plant Special Seed</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Buy more seeds</button></div>`,'PLANTING • VOCABULARY','plot');}
  if(p.crop.type==='special')return showSpecialPlot(i);
  const crop=p.crop,c=CROPS[crop.type],due=isDue(crop),stage=cropStage(crop),readyName=ACTIONS[crop.stage];let msg;
- if(due){msg=crop.retryAfter>now()?`<div class="timer-block">Try again in <span class="retry-live" data-until="${crop.retryAfter}">${formatSeconds(crop.retryAfter-now())}</span></div>`:'';}
- else{msg=`<div class="timer-block"><div class="smallcaps">Ready in</div><div class="timer-number live-countdown" data-until="${crop.nextDueAt}">${formatSeconds(crop.nextDueAt-now())}</div></div>`;}
+ if(due){msg='';if(crop.retryAfter>now())showFarmCooldown(i);}
+ else{msg=`<div class="timer-block"><div class="smallcaps">Ready in</div><div class="timer-number live-countdown" data-index="${i}" data-until="${crop.nextDueAt}">${formatSeconds(crop.nextDueAt-now())}</div></div>`;}
  openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img(assetPreview)}<div><h3>${escapeHTML(c.name)}</h3><p>Stage ${stage+1}/5</p></div></div>${msg}<div class="button-row">${due?`<button class="primary-btn" data-do="start-question" data-index="${i}" ${crop.retryAfter>now()?'disabled':''}>${readyName} · ${ACTION_VI[crop.stage]}</button>`:''}</div>`,'FARM • GROW YOUR VOCABULARY','plot');}
 function plantSpecial(i){
  const plot=state.plots[i];if(!plot||!plot.unlocked||plot.crop||!(state.seeds.special>0)||actionMotion)return;
@@ -940,7 +951,8 @@ function showSpecialPlot(i){
  const done=c.stage===4;const title=pending?'Finish character reveal':done?'Harvest companion':SPECIAL_ACTIONS[c.stage];const vi=pending?'Hoàn tất mở nhân vật':done?'Thu hoạch':SPECIAL_ACTION_VI[c.stage];
  const character=c.characterId?petById(c).name:'Mystery character';const tag=c.rarity?companionStars(c.rarity):'???';
  const timer=due?'Ready now':formatSeconds(c.nextDueAt-now());
- openModal(`Special Seed · Plot ${i+1}`,`<div class="plot-banner">${img(specialGrowthArt(c))}<div><h3>${escapeHTML(character)}</h3><p>${escapeHTML(tag)} · Stage ${c.stage+1}/5</p></div></div>${due?(c.retryAfter>now()?`<div class="timer-block">Try again in <span class="retry-live" data-until="${c.retryAfter}">${formatSeconds(c.retryAfter-now())}</span></div>`:''):`<div class="timer-block">Ready in <strong class="live-countdown" data-until="${c.nextDueAt}">${escapeHTML(timer)}</strong></div>`}<div class="button-row">${due?`<button class="primary-btn" data-do="${pending?'finish-special-reveal':done?'harvest-special':'start-question'}" data-index="${i}" ${c.retryAfter>now()?'disabled':''}>${escapeHTML(title)} · ${escapeHTML(vi)}</button>`:''}</div>`,'SPECIAL SEED • MAGIC COMPANION','plot');
+ if(due&&c.retryAfter>now())showFarmCooldown(i);
+ openModal(`Special Seed · Plot ${i+1}`,`<div class="plot-banner">${img(specialGrowthArt(c))}<div><h3>${escapeHTML(character)}</h3><p>${escapeHTML(tag)} · Stage ${c.stage+1}/5</p></div></div>${due?'':`<div class="timer-block">Ready in <strong class="live-countdown" data-index="${i}" data-until="${c.nextDueAt}">${escapeHTML(timer)}</strong></div>`}<div class="button-row">${due?`<button class="primary-btn" data-do="${pending?'finish-special-reveal':done?'harvest-special':'start-question'}" data-index="${i}" ${c.retryAfter>now()?'disabled':''}>${escapeHTML(title)} · ${escapeHTML(vi)}</button>`:''}</div>`,'SPECIAL SEED • MAGIC COMPANION','plot');
 }
 async function finishSpecialReveal(index,questionContext=null,actionDone=null){
  if(!ONLINE||specialServerBusy)return;
@@ -1221,8 +1233,9 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
  const plot=state.plots[q.plotIndex],crop=plot?.crop;if(!crop)return;
  const attempt=crop.wrong+1;
  logQuestionAttempt(q.word,'Farm',crop.type==='special'?SPECIAL_ACTIONS[crop.stage]:ACTIONS[crop.stage],given,correct,attempt,correctValue);recordOnlineAction('answer',{plot:q.plotIndex,answer:given});
- if(!correct){crop.wrong++;crop.retryAfter=now()+crop.wrong*10000;save();if(ONLINE)flushOnline();
-  openModal('',`<div class="answer-result incorrect"><span class="wrong-x">×</span> Incorrect</div><div class="timer-block compact-timer">Try again in <strong class="retry-live" data-until="${crop.retryAfter}">${formatSeconds(crop.retryAfter-now())}</strong></div><div class="button-row"><button id="retryNow" class="primary-btn" data-do="retry-plot" data-index="${q.plotIndex}" disabled>Try again</button></div>`,'','retry');return;
+ if(!correct){crop.wrong++;crop.retryAfter=now()+10000;save();if(ONLINE)flushOnline();
+  showFarmCooldown(q.plotIndex);
+  openModal('',`<div class="answer-result incorrect"><span class="wrong-x">×</span> Incorrect</div><div class="button-row"><button id="retryNow" class="primary-btn" data-do="retry-plot" data-index="${q.plotIndex}" disabled>Try again</button></div>`,'','retry');return;
  }
  if(crop.type==='special'){
   crop.wrong=0;crop.retryAfter=0;
@@ -1861,12 +1874,15 @@ async function logoutStudent(){
   if(onlineBusy||onlineDirty&&!(await flushOnline())){toast('Progress has not synced. Please retry logout after the save succeeds.',true);return;}
   try{await serverCall('studentLogout',onlineToken);}catch(err){toast('Could not revoke the session. Please retry logout.',true);return;}
  }
- closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
+ closeModal();hideFarmCooldown();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
  toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');$('devToolsButton').classList.add('hidden');
 }
-function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el.textContent=countdownLong(Number(el.dataset.until)-now());});document.querySelectorAll('.live-countdown,.retry-live').forEach(el=>{let left=Number(el.dataset.until)-now();el.textContent=formatSeconds(left);});
+function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el.textContent=countdownLong(Number(el.dataset.until)-now());});document.querySelectorAll('.live-countdown').forEach(el=>{let left=Number(el.dataset.until)-now();el.textContent=formatSeconds(left);});
+ updateFarmCooldown();
+ const readyTimer=document.querySelector('#modalPanel[data-mode="plot"] .live-countdown[data-index]');
+ if(readyTimer&&Number(readyTimer.dataset.until)<=now())showPlot(Number(readyTimer.dataset.index));
  const retry=$('retryNow');if(retry&&retry.disabled){const ix=Number(retry.dataset.index),crop=state.plots[ix]?.crop;if(crop&&now()>=crop.retryAfter)retry.disabled=false;}
- if(activeModal==='plot'){const b=document.querySelector('[data-do="start-question"]');if(b&&b.disabled){const i=Number(b.dataset.index),c=state.plots[i]?.crop;if(c&&now()>=c.retryAfter)b.disabled=false;}}
+ if(activeModal==='plot'){const b=document.querySelector('#modalBody [data-do="start-question"],#modalBody [data-do="finish-special-reveal"],#modalBody [data-do="harvest-special"]');if(b&&b.disabled){const i=Number(b.dataset.index),c=state.plots[i]?.crop;if(c&&now()>=c.retryAfter)b.disabled=false;}}
  if($('orderCountdown'))$('orderCountdown').textContent=formatSeconds(state.ordersExpire-now());
  if(now()>=state.ordersExpire&&state.orders.length){initOrders();if(activeModal==='harbour')showHarbour();}
 }
