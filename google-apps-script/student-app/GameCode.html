@@ -165,16 +165,17 @@ const POS_LABELS={
  n:'Danh từ (n)',v:'Động từ (v)',adj:'Tính từ (adj)',adv:'Trạng từ (adv)',
  'n.phr':'Cụm danh từ (n. phr.)','v.phr':'Cụm động từ (v. phr.)',
  'adj.phr':'Cụm tính từ (adj. phr.)','adv.phr':'Cụm trạng từ (adv. phr.)',
- phrasal:'Động từ kết hợp tiểu từ (phrasal verb)',idiom:'Thành ngữ (idiom)',
+ idiom:'Thành ngữ (idiom)',
  collocation:'Kết hợp từ (collocation)','n/v':'Danh từ hoặc động từ (n/v)',
  'v/n':'Động từ hoặc danh từ (v/n)',conj:'Liên từ (conj.)'
 };
-const POS_NEIGHBORS={n:['n.phr','v','adj'],v:['v.phr','phrasal','n'],adj:['adj.phr','adv','n'],adv:['adv.phr','adj','v'],
- 'n.phr':['n','v.phr','collocation'],'v.phr':['v','phrasal','collocation'],
+const POS_NEIGHBORS={n:['n.phr','v','adj'],v:['v.phr','n','adj'],adj:['adj.phr','adv','n'],adv:['adv.phr','adj','v'],
+ 'n.phr':['n','v.phr','collocation'],'v.phr':['v','n.phr','collocation'],
  'adj.phr':['adj','n.phr','collocation'],'adv.phr':['adv','v.phr','collocation'],
- phrasal:['v.phr','v','idiom'],idiom:['collocation','phrasal','v.phr'],
+ idiom:['collocation','v.phr','n.phr'],
  collocation:['idiom','n.phr','v.phr'],'n/v':['n','v','n.phr'],
  'v/n':['v','n','v.phr'],conj:['adv','v.phr','n.phr']};
+const learnerPOS=pos=>pos==='phrasal'?'v.phr':pos;
 function canonicalPOS(raw,english=''){
  const key=String(raw||'').trim().toLowerCase().replace(/[().\s_/-]+/g,'');
  const codes={n:'n',noun:'n',v:'v',verb:'v',adj:'adj',adjective:'adj',adv:'adv',adverb:'adv',
@@ -185,7 +186,7 @@ function canonicalPOS(raw,english=''){
  const pos=codes[key]||null;
  return String(english).trim().toLowerCase()==='focus on'&&pos==='v'?'v.phr':pos;
 }
-const posLabel=pos=>POS_LABELS[pos]||String(pos||'');
+const posLabel=pos=>POS_LABELS[learnerPOS(pos)]||String(pos||'');
 const SPECIAL_DISTRACTORS = {planet:{en:['plane','plant','platform'],meaning:['máy bay','cây','nền tảng']},library:{en:['liberty','laboratory','literary']},beautiful:{en:['bountiful','beauty','careful']},protect:{en:['project','protest','produce']}};
 const $ = id => document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -211,7 +212,6 @@ let bank=[...SAMPLE_WORDS];
 let state=null;
 let playing=false;
 let activeModal='';
-let farmCooldownHideTimer=null;
 let qContext=null;
 let modalAction=null;
 let images={};
@@ -299,7 +299,7 @@ function makeHistoryId(){return 'ev_'+now()+'_'+Math.random().toString(36).slice
 function recordOnlineAction(type,data={}){if(ONLINE&&onlineToken)onlinePendingActions.push({id:'act_'+now()+'_'+Math.random().toString(36).slice(2,14),type,data});}
 function stopOnlineSession(message){
  const token=onlineToken;onlineToken=null;onlineDirty=false;onlinePendingActions=[];onlinePendingEvents=[];
- clearTimeout(onlineSaveTimer);closeModal();hideFarmCooldown();playing=false;
+ clearTimeout(onlineSaveTimer);closeModal();playing=false;
  $('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
  $('loginError').textContent=message;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');
  if(token)void serverCall('studentLogout',token).catch(()=>{});
@@ -628,7 +628,9 @@ function renderWorld(){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#2698e0'
  }
  else drawImage(ctx,`assets/crops/${c.type}/${c.type}_0${stage}_${STAGES[stage]}.png`,p.x+p.width/2-32,p.y-6,64,64);
  const markerY=c.type==='special'&&c.stage>=1&&c.rarity?p.y-48:p.y-12;
- if(isDue(c)){drawWorldMarker(p.x+p.width/2,markerY,'!',true);}else drawWorldMarker(p.x+p.width/2,markerY,formatSeconds(c.nextDueAt-now()),false);}
+ if(c.retryAfter>now())drawWorldMarker(p.x+p.width/2,markerY,formatSeconds(c.retryAfter-now()),false);
+ else if(isDue(c))drawWorldMarker(p.x+p.width/2,markerY,'!',true);
+ else drawWorldMarker(p.x+p.width/2,markerY,formatSeconds(c.nextDueAt-now()),false);}
  else if(!plot.unlocked){ctx.font='900 12px Trebuchet MS';ctx.textAlign='center';ctx.fillStyle='#fff8d5';ctx.strokeStyle='#6b4d29';ctx.lineWidth=3;ctx.strokeText(String(i+1),p.x+p.width/2,p.y+51);ctx.fillText(String(i+1),p.x+p.width/2,p.y+51);}
  });
  drawFences();drawDecorations();drawCompanions();drawEffects();
@@ -668,16 +670,6 @@ function updateHUD(){if(!state)return;$('hudName').textContent=state.name;$('hud
  $('hudXPLabel').textContent=`${state.xp} / ${xpNeed(state.level)}`;$('hudXPBar').style.width=(100*state.xp/xpNeed(state.level))+'%';
  $('areaName').textContent=player.x>1515?'Seed Shop Island':'Main Farm Island';}
 function toast(msg,bad=false){const el=document.createElement('div');el.className='toast'+(bad?' bad':'');el.textContent=msg;$('toastStack').append(el);setTimeout(()=>el.remove(),4100)}
-function hideFarmCooldown(){clearTimeout(farmCooldownHideTimer);farmCooldownHideTimer=null;$('farmCooldown').classList.add('hidden');delete $('farmCooldown').dataset.index;}
-function updateFarmCooldown(){const banner=$('farmCooldown');if(banner.classList.contains('hidden'))return;
- const crop=state?.plots[Number(banner.dataset.index)]?.crop,left=Number(crop?.retryAfter||0)-now();
- $('farmCooldownTime').textContent=formatSeconds(left);
- if(left<=0&&!farmCooldownHideTimer)farmCooldownHideTimer=setTimeout(hideFarmCooldown,300);
-}
-function showFarmCooldown(index){const crop=state?.plots[index]?.crop;if(!crop||crop.retryAfter<=now())return;
- clearTimeout(farmCooldownHideTimer);farmCooldownHideTimer=null;
- const banner=$('farmCooldown');banner.dataset.index=String(index);banner.classList.remove('hidden');updateFarmCooldown();
-}
 
 // --------------------------- Interface ---------------------------
 function openModal(title,html,kicker='VOCAB FARM ISLAND',id='generic'){
@@ -935,7 +927,7 @@ function showPlot(i){const p=state.plots[i],assetPreview=plotArt(i);if(!p.unlock
  if(!p.crop){return openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img('assets/plots/plot_tilled.png')}<div><h3>Choose a seed</h3></div></div><h3 class="section-heading">Your available seeds</h3><div class="card-grid">${CROP_DATA.map(c=>`<div class="item-card">${img(cropIcon(c.id,'seed'))}<strong>${escapeHTML(c.name)}</strong><small>Owned: ${state.seeds[c.id]||0}</small><span class="subtext">${c.mins} min total</span><button class="primary-btn" data-do="plant" data-index="${i}" data-crop="${c.id}" ${!(state.seeds[c.id]>0)?'disabled':''}>Plant seed</button></div>`).join('')}</div><h3 class="section-heading">Special Seed</h3><div class="item-card">${img(specialSeedArt)}<strong>Magical character seed</strong><small>Owned: ${state.seeds.special||0} · Four care questions</small><button class="primary-btn" data-do="plant-special" data-index="${i}" ${!(state.seeds.special>0)?'disabled':''}>Plant Special Seed</button></div><div class="button-row"><button class="secondary-btn" data-do="shop">🛒 Buy more seeds</button></div>`,'PLANTING • VOCABULARY','plot');}
  if(p.crop.type==='special')return showSpecialPlot(i);
  const crop=p.crop,c=CROPS[crop.type],due=isDue(crop),stage=cropStage(crop),readyName=ACTIONS[crop.stage];let msg;
- if(due){msg='';if(crop.retryAfter>now())showFarmCooldown(i);}
+ if(due){msg='';}
  else{msg=`<div class="timer-block"><div class="smallcaps">Ready in</div><div class="timer-number live-countdown" data-index="${i}" data-until="${crop.nextDueAt}">${formatSeconds(crop.nextDueAt-now())}</div></div>`;}
  openModal(`Farm Plot ${i+1}`,`<div class="plot-banner">${img(assetPreview)}<div><h3>${escapeHTML(c.name)}</h3><p>Stage ${stage+1}/5</p></div></div>${msg}<div class="button-row">${due?`<button class="primary-btn" data-do="start-question" data-index="${i}" ${crop.retryAfter>now()?'disabled':''}>${readyName} · ${ACTION_VI[crop.stage]}</button>`:''}</div>`,'FARM • GROW YOUR VOCABULARY','plot');}
 function plantSpecial(i){
@@ -951,7 +943,6 @@ function showSpecialPlot(i){
  const done=c.stage===4;const title=pending?'Finish character reveal':done?'Harvest companion':SPECIAL_ACTIONS[c.stage];const vi=pending?'Hoàn tất mở nhân vật':done?'Thu hoạch':SPECIAL_ACTION_VI[c.stage];
  const character=c.characterId?petById(c).name:'Mystery character';const tag=c.rarity?companionStars(c.rarity):'???';
  const timer=due?'Ready now':formatSeconds(c.nextDueAt-now());
- if(due&&c.retryAfter>now())showFarmCooldown(i);
  openModal(`Special Seed · Plot ${i+1}`,`<div class="plot-banner">${img(specialGrowthArt(c))}<div><h3>${escapeHTML(character)}</h3><p>${escapeHTML(tag)} · Stage ${c.stage+1}/5</p></div></div>${due?'':`<div class="timer-block">Ready in <strong class="live-countdown" data-index="${i}" data-until="${c.nextDueAt}">${escapeHTML(timer)}</strong></div>`}<div class="button-row">${due?`<button class="primary-btn" data-do="${pending?'finish-special-reveal':done?'harvest-special':'start-question'}" data-index="${i}" ${c.retryAfter>now()?'disabled':''}>${escapeHTML(title)} · ${escapeHTML(vi)}</button>`:''}</div>`,'SPECIAL SEED • MAGIC COMPANION','plot');
 }
 async function finishSpecialReveal(index,questionContext=null,actionDone=null){
@@ -1050,7 +1041,7 @@ function showCompanionDetail(characterId){
   <div class="button-row"><button class="secondary-btn" data-do="companions">← Back to Collection</button></div>
  `,'COMPANION DETAILS · WORD PRACTICE','companion-detail');
 }
-function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}${ONLINE&&onlineTestMode?'<button class="secondary-btn" data-do="dev-tools">🧪 Test controls</button>':''}<button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div><p class="fine-print">${ONLINE?'Class progress is saved in the teacher’s private Google Sheet.':'Offline demo: progress stays in this browser.'}</p>`,'YOUR FARM • PERSONAL PROGRESS','house');}
+function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}${ONLINE&&onlineTestMode?'<button class="secondary-btn" data-do="dev-tools">🧪 Test controls</button>':''}<button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div>`,'YOUR FARM • PERSONAL PROGRESS','house');}
 
 // -------------------- Vocabulary questions --------------------
 function editDistance(a,b){a=slug(a);b=slug(b);const dp=Array(b.length+1).fill(0).map((_,i)=>i);for(let i=1;i<=a.length;i++){let prev=dp[0];dp[0]=i;for(let j=1;j<=b.length;j++){let temp=dp[j];dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=temp;}}return dp[b.length]}
@@ -1059,7 +1050,10 @@ function distractors(w,field){const extras=SPECIAL_DISTRACTORS[slug(w.english)]|
  if(field==='meaning'&&extras.meaning)candidates.push(...extras.meaning);
  const sorted=bank.filter(x=>x.id!==w.id).map(x=>({word:x,distance:editDistance(x.english,w.english)})).sort((a,b)=>a.distance-b.distance);
  candidates.push(...sorted.map(x=>field==='en'?x.word.english:x.word.meaning));
- return [...new Set(candidates.map(x=>String(x).trim()).filter(x=>slug(x)!==slug(field==='en'?w.english:w.meaning)))].slice(0,3);
+ const keyFor=value=>slug(value).replace(/\s+/g,' ');
+ const seen=new Set([keyFor(field==='en'?w.english:w.meaning)]),choices=[];
+ for(const candidate of candidates){const value=String(candidate).trim(),key=keyFor(value);if(!key||seen.has(key))continue;seen.add(key);choices.push(value);if(choices.length===3)break;}
+ return choices;
 }
 function maskWord(s){const parts=[...s];let indices=[];for(let i=0,k=0;i<parts.length;i++)if(/[a-z]/i.test(parts[i])){if(k%2===1)indices.push(i);k++;}if(!indices.length){const fi=parts.findIndex(x=>/[a-z]/i.test(x));if(fi>=0)indices=[fi];}
  const masked=parts.map((ch,i)=>indices.includes(i)?'_':ch).join('');return {masked,indices};}
@@ -1067,11 +1061,12 @@ function maskWord(s){const parts=[...s];let indices=[];for(let i=0,k=0;i<parts.l
 function englishExample(w){
  return String(w.example||'').replace(/^\s*(?:e\.g\.|example:)\s*/i,'').split('(')[0].trim();
 }
-function hasOtherPOS(w){return bank.some(other=>other.id!==w.id&&slug(other.english)===slug(w.english)&&other.pos!==w.pos);}
+function hasOtherPOS(w){return bank.some(other=>other.id!==w.id&&slug(other.english)===slug(w.english)&&learnerPOS(other.pos)!==learnerPOS(w.pos));}
 function makeQuestion(w,stage){
- if(stage===0){const choices=[w.pos,...(POS_NEIGHBORS[w.pos]||['n','v','adj'])].filter((value,index,array)=>POS_LABELS[value]&&array.indexOf(value)===index).slice(0,4);
+ if(stage===0){const answer=learnerPOS(w.pos),seen=new Set();
+  const choices=[answer,...(POS_NEIGHBORS[answer]||['n','v','adj'])].filter(value=>{const label=POS_LABELS[value];if(!label||seen.has(label))return false;seen.add(label);return true;}).slice(0,4);
   const opts=shuffled(choices.map(v=>({v,label:posLabel(v)})));
-  return {stage,type:'pos',title:`Từ loại của “<strong>${escapeHTML(w.english)}</strong>” trong câu:<br><span class="question-context">${escapeHTML(englishExample(w))}</span>`,options:opts.map(x=>({value:x.v,label:x.label})),correct:w.pos};}
+  return {stage,type:'pos',title:`Từ loại của “<strong>${escapeHTML(w.english)}</strong>” trong câu:<br><span class="question-context">${escapeHTML(englishExample(w))}</span>`,options:opts.map(x=>({value:x.v,label:x.label})),correct:answer};}
  if(stage===1){const opts=shuffled([w.meaning,...distractors(w,'meaning')]);
   return {stage,type:'meaning',title:`“<strong>${escapeHTML(w.english)}</strong>”${hasOtherPOS(w)?` (${escapeHTML(posLabel(w.pos))})`:''} nghĩa là:`,options:opts.map(x=>({value:x,label:x})),correct:w.meaning};}
  if(stage===2){const opts=shuffled([w.english,...distractors(w,'en')]);
@@ -1085,7 +1080,7 @@ function getWeeklyWords(){syncDaily();return deterministicShuffle(bank,DAY_SEED(
 let challengeReturnScroll=0;
 function challengeCards(words,answers,kind,feedback=null){return words.map((w,i)=>{
  const h=answers[w.id],justAnswered=feedback?.kind===kind&&feedback.index===i;
- const detail=justAnswered?`<div class="challenge-answer-note ${feedback.correct?'correct':'incorrect'}" role="status">${feedback.correct?`✓ Correct · +${feedback.reward} gold`:'× Incorrect · 0 gold'}<br><span>Answer: ${escapeHTML(feedback.expected)}</span></div>`:'';
+ const detail=justAnswered?`<div class="challenge-answer-note ${feedback.correct?'correct':'incorrect'}" role="status">${feedback.correct?`✓ Correct · +${feedback.reward} gold`:'× Incorrect · 0 gold'}</div>`:'';
  return `<div class="challenge-card ${justAnswered?'challenge-just-answered':''}" data-challenge-card="${kind}-${i}">${img('assets/ui/badges/64/badge_'+kind+'.png')}<div class="challenge-question-info"><strong>Question ${i+1}</strong>${detail}</div>${h?`<span class="tag ${h.correct?'':'danger'}">${h.correct?'✓ Correct':'× Incorrect'}</span>`:`<button class="primary-btn" data-do="challenge" data-kind="${kind}" data-index="${i}">Answer · Trả lời</button>`}</div>`;
  }).join('');}
 function showMissions(feedback=null){
@@ -1109,7 +1104,7 @@ function showChallengeQuestion(kind,i){
  challengeReturnScroll=$('modalBody').scrollTop;
  qContext={kind,period:isWeekly?entry.week:entry.day,dailyIndex:i,word,stage:1,question:makeQuestion(word,1),selection:null};renderQuestion();
 }
-function showRanks(){openModal('Farmer Ranks · Danh hiệu',`<div class="rank-list">${RANKS.map(([name,vi],i)=>`<div class="rank-item ${rankForLevel(state.level).index===i?'current':''}"><strong>${i+1}. ${escapeHTML(name)}</strong><span>${escapeHTML(vi)}</span><small>Lv ${i*5+1}–${(i+1)*5}${i===9?' · level 51+ remains Island Legend':''}</small></div>`).join('')}</div><p class="fine-print">Levels never end. After level 50, your rank stays Island Legend while your level keeps increasing.</p>`,'','ranks');}
+function showRanks(){openModal('Farmer Ranks · Danh hiệu',`<div class="rank-list">${RANKS.map(([name,vi],i)=>`<div class="rank-item ${rankForLevel(state.level).index===i?'current':''}"><strong>${i+1}. ${escapeHTML(name)}</strong><span>${escapeHTML(vi)}</span><small>Lv ${i*5+1}${i===9?'+':'–'+(i+1)*5}</small></div>`).join('')}</div>`,'','ranks');}
 function renderQuestion(){const q=qContext;if(!q)return;
  let inputHtml='';if(q.question.type==='spelling'){
   // The missing letters are REAL, VISIBLE, one-character text inputs embedded
@@ -1213,7 +1208,7 @@ function configureSpellingField(q){
 function chooseAnswer(i){if(!qContext||qContext.question.type==='spelling')return;qContext.selection=i;document.querySelectorAll('[data-choice]').forEach(el=>{const yes=Number(el.dataset.choice)===i;el.classList.toggle('selected',yes);el.setAttribute('aria-pressed',String(yes));});$('submitAnswer').disabled=false}
 function clearAnswer(){if(!qContext)return;if(qContext.question.type==='spelling'){qContext._clearSpelling?.();}
  else{qContext.selection=null;document.querySelectorAll('[data-choice]').forEach(el=>{el.classList.remove('selected');el.setAttribute('aria-pressed','false');});$('submitAnswer').disabled=true}}
-function logQuestionAttempt(word,source,stage,answer,correct,attempt,expected){const entry={eventId:makeHistoryId(),time:now(),source,stage,wordId:word.id,word:`${word.english} (${word.pos})`,answer,expected,correct,attempt};state.history.push(entry);if(state.history.length>3000)state.history=state.history.slice(-3000);if(!ONLINE)void VFIRecovery.archiveAttempt(state.id,entry);if(ONLINE)onlinePendingEvents.push(entry);}
+function logQuestionAttempt(word,source,stage,answer,correct,attempt,expected){const entry={eventId:makeHistoryId(),time:now(),source,stage,wordId:word.id,linguisticPos:word.pos,word:`${word.english} (${posLabel(word.pos)})`,answer,expected,correct,attempt};state.history.push(entry);if(state.history.length>3000)state.history=state.history.slice(-3000);if(!ONLINE)void VFIRecovery.archiveAttempt(state.id,entry);if(ONLINE)onlinePendingEvents.push(entry);}
 async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q||activeModal!=='question')return;const correctValue=q.question.correct;
  let given=q.question.type==='spelling'?(q._getSpellingWord?.()||'').trim():q.question.options[q.selection]?.value;
  if(!given||given.includes('_')){toast('Please complete your answer before submitting.',true);return;}
@@ -1226,16 +1221,16 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
   if(correct){entry.correct++;state.gold+=reward;}
   logQuestionAttempt(q.word,weekly?'Weekly challenge':'Daily challenge','English → Vietnamese',given,correct,1,correctValue);recordOnlineAction('challenge',{kind:q.kind,wordId:q.word.id,answer:given});checkBadges();save();if(ONLINE)flushOnline();updateHUD();
   // Stay in Challenges after answering instead of opening a closable feedback popup.
-  // The answered question shows a compact result and the correct answer in-place.
-  const result={kind:q.kind,index:q.dailyIndex,correct,reward,expected:correctValue};
+  // The answered question shows a compact result in-place.
+  const result={kind:q.kind,index:q.dailyIndex,correct,reward};
   qContext=null;showMissions(result);return;
  }
  const plot=state.plots[q.plotIndex],crop=plot?.crop;if(!crop)return;
  const attempt=crop.wrong+1;
  logQuestionAttempt(q.word,'Farm',crop.type==='special'?SPECIAL_ACTIONS[crop.stage]:ACTIONS[crop.stage],given,correct,attempt,correctValue);recordOnlineAction('answer',{plot:q.plotIndex,answer:given});
  if(!correct){crop.wrong++;crop.retryAfter=now()+10000;save();if(ONLINE)flushOnline();
-  showFarmCooldown(q.plotIndex);
-  openModal('',`<div class="answer-result incorrect"><span class="wrong-x">×</span> Incorrect</div><div class="button-row"><button id="retryNow" class="primary-btn" data-do="retry-plot" data-index="${q.plotIndex}" disabled>Try again</button></div>`,'','retry');return;
+  const spellingReview=q.question.type==='spelling'?`<div class="feedback bad"><strong>Correct spelling · Đáp án đúng:</strong> ${escapeHTML(correctValue)}</div>`:'';
+  openModal('',`<div class="answer-result incorrect"><span class="wrong-x">×</span> Incorrect</div>${spellingReview}<div class="button-row"><button id="retryNow" class="primary-btn" data-do="retry-plot" data-index="${q.plotIndex}" disabled>Try again</button></div>`,'','retry');return;
  }
  if(crop.type==='special'){
   crop.wrong=0;crop.retryAfter=0;
@@ -1277,7 +1272,7 @@ function exportTemplate(){const rows=[['English word','UK IPA','Part of speech',
 function parseCSV(text){text=text.replace(/^\ufeff/,'');const lines=[];let row=[],cell='',q=false;for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(q&&text[i+1]==='"'){cell+='"';i++}else q=!q;}else if(ch===','&&!q){row.push(cell);cell='';}else if((ch==='\n'||ch==='\r')&&!q){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);cell='';if(row.some(x=>x.trim()))lines.push(row);row=[];}else cell+=ch;}row.push(cell);if(row.some(x=>x.trim()))lines.push(row);return lines;}
 function importCSVFile(e){const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{
  const rows=parseCSV(String(reader.result||''));if(!rows.length)throw Error('The file is empty.');let start=/english|từ vựng|word/i.test(rows[0][0]||'')?1:0;const current=JSON.parse(localStorage.getItem(BANK_KEY)||'[]');let added=0,skipped=0;
- for(const line of rows.slice(start)){if(line.length<5){skipped++;continue;}const [english,ipa,pos0,meaning,example]=line.map(x=>x.trim());const pos=canonicalPOS(pos0,english);if(!english||!ipa||!meaning||!pos||!example){skipped++;continue;}const legacyPos=pos==='v.phr'?'v':pos==='n/v'?'n':pos.replace(/\W+/g,'');const id='custom_'+slug(english).replace(/[^a-z0-9]+/g,'_')+'_'+legacyPos;if(bank.some(x=>slug(x.english)===slug(english)&&x.pos===pos)){skipped++;continue;}const w={id,english,ipa,pos,meaning,example};current.push(w);bank.push(w);added++;}
+ for(const line of rows.slice(start)){if(line.length<5){skipped++;continue;}const [english,ipa,pos0,meaning,example]=line.map(x=>x.trim());const pos=canonicalPOS(pos0,english);if(!english||!ipa||!meaning||!pos||!example){skipped++;continue;}const legacyPos=learnerPOS(pos)==='v.phr'?'v':pos==='n/v'?'n':pos.replace(/\W+/g,'');const id='custom_'+slug(english).replace(/[^a-z0-9]+/g,'_')+'_'+legacyPos;if(bank.some(x=>slug(x.english)===slug(english)&&learnerPOS(x.pos)===learnerPOS(pos))){skipped++;continue;}const w={id,english,ipa,pos,meaning,example};current.push(w);bank.push(w);added++;}
  localStorage.setItem(BANK_KEY,JSON.stringify(current));toast(`${added} words imported (${skipped} skipped).`);
  }catch(err){toast('Could not import CSV: '+err.message,true)}};reader.readAsText(file,'UTF-8');}
 
@@ -1874,11 +1869,10 @@ async function logoutStudent(){
   if(onlineBusy||onlineDirty&&!(await flushOnline())){toast('Progress has not synced. Please retry logout after the save succeeds.',true);return;}
   try{await serverCall('studentLogout',onlineToken);}catch(err){toast('Could not revoke the session. Please retry logout.',true);return;}
  }
- closeModal();hideFarmCooldown();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
+ closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
  toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');$('devToolsButton').classList.add('hidden');
 }
 function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el.textContent=countdownLong(Number(el.dataset.until)-now());});document.querySelectorAll('.live-countdown').forEach(el=>{let left=Number(el.dataset.until)-now();el.textContent=formatSeconds(left);});
- updateFarmCooldown();
  const readyTimer=document.querySelector('#modalPanel[data-mode="plot"] .live-countdown[data-index]');
  if(readyTimer&&Number(readyTimer.dataset.until)<=now())showPlot(Number(readyTimer.dataset.index));
  const retry=$('retryNow');if(retry&&retry.disabled){const ix=Number(retry.dataset.index),crop=state.plots[ix]?.crop;if(crop&&now()>=crop.retryAfter)retry.disabled=false;}

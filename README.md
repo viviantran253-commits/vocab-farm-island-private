@@ -35,6 +35,6 @@ Existing offline demo progress is not imported into the teacher Sheet. Google Ap
 
 ## Vocabulary categories
 
-In each `Vocab_` tab, column C accepts `n`, `v`, `adj`, `adv`, `n. phr.`, `v. phr.`, `adj. phr.`, `adv. phr.`, `phrasal verb`, `idiom`, `collocation`, `conj`, `n/v`, or `v/n` (or their full English names). Use `v. phr.` for “focus on”; use `phrasal verb` when a verb combines with a particle, such as “give up.” These categories appear in learning cards and questions. Existing word IDs and progress for legacy verb phrases remain intact.
+In each `Vocab_` tab, column C accepts `n`, `v`, `adj`, `adv`, `n. phr.`, `v. phr.`, `adj. phr.`, `adv. phr.`, `phrasal verb`, `idiom`, `collocation`, `conj`, `n/v`, or `v/n` (or their full English names). Use `v. phr.` for “focus on”; `phrasal verb` remains available when the teacher wants to record the more specific linguistic type, such as “give up.” Both appear to students and are graded as **Cụm động từ (v. phr.)**. The original type remains in the word record, and existing word IDs and progress remain intact.
 
 The November 2026 workbook audit checked all 962 populated vocabulary rows across the student tabs. Every row is now loadable, including mixed noun/verb entries and the conjunction in `Vocab_10`. The phrase labels for “make a decision,” “communal house,” and three standalone phrasal verbs were corrected in the private teacher Sheet. Existing word IDs for the edited entries are preserved by the server.

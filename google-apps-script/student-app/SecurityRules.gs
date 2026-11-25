@@ -13,7 +13,10 @@ function secPay_(p,n){secCheck_(p.gold>=n,'Not enough gold.');p.gold-=n;}
 function secXP_(p,n){p.xpTotal=(Number(p.xpTotal)||0)+n;p.xp=(Number(p.xp)||0)+n;for(let i=0;p.xp>=50+25*(p.level-1)&&i<10000;i++){p.xp-=50+25*(p.level-1);p.level++;}}
 function secPeriods_(p,at){const day=Utilities.formatDate(new Date(at),'Asia/Ho_Chi_Minh','yyyy-MM-dd');const local=new Date(at+7*3600000);local.setUTCHours(0,0,0,0);local.setUTCDate(local.getUTCDate()-(local.getUTCDay()+6)%7);const week=Utilities.formatDate(new Date(local.getTime()-7*3600000),'Asia/Ho_Chi_Minh','yyyy-MM-dd');if(p.daily?.day!==day)p.daily={day,answers:{},correct:0};if(p.weekly?.week!==week)p.weekly={week,answers:{},correct:0};}
 function secOrder_(p,id,at,index,nonce){const available=Object.keys(SEC_CROPS).filter(k=>SEC_CROPS[k][3]<=p.level),seed=(Number(id)||1)*31+Math.floor(at/(45*60000))*17+index*13+nonce*19,items=[];for(let j=0;j<1+index%3;j++){const crop=available[(seed+j*5)%available.length];if(!items.some(x=>x.id===crop))items.push({id:crop,qty:1+(seed+j)%3});}return {id:'ord_'+at+'_'+index+'_'+nonce,items,fulfilled:false};}
-function secAnswer_(word,stage,answer){const expected=stage==='Water'?word.pos:stage==='Tend'||stage==='English → Vietnamese'?word.meaning:word.english;return {expected,correct:String(answer||'').trim().toLowerCase()===String(expected).trim().toLowerCase()};}
+function secAnswer_(word,stage,answer){const pos=value=>value==='phrasal'?'v.phr':value;
+ const expected=stage==='Water'?pos(word.pos):stage==='Tend'||stage==='English → Vietnamese'?word.meaning:word.english;
+ const given=stage==='Water'?pos(String(answer||'').trim().toLowerCase()):String(answer||'').trim().toLowerCase();
+ return {expected,correct:given===String(expected).trim().toLowerCase()};}
 function secChallengeWords_(words,period,slot,limit){
  let h=2166136261;for(const c of `${period}-${slot}`)h=Math.imul(h^c.charCodeAt(0),16777619);
  let x=h>>>0;const copy=[...words];for(let i=copy.length-1;i>0;i--){x^=x<<13;x^=x>>>17;x^=x<<5;const j=(x>>>0)%(i+1);[copy[i],copy[j]]=[copy[j],copy[i]];}
