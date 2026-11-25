@@ -2,6 +2,7 @@
 (() => {
 'use strict';
 const MAP = window.FARM_MAP;
+const audio = window.VFIAudio;
 const WALK_MASK = window.FARM_WALK_MASK;
 const WALK_BITS = WALK_MASK ? Uint8Array.from(atob(WALK_MASK.bits),char=>char.charCodeAt(0)) : null;
 const ASSET = 'assets/';
@@ -287,6 +288,14 @@ function canBuySpecial(){return state.level>=SPECIAL_SEED.level&&state.gold>=SPE
 let onlineToken=null,onlineDirty=false,onlineBusy=false,onlineRevision=0,onlineSaveAt=0,onlineErrorAt=0,onlineTestMode=false,onlineTestBusy=false;
 let onlinePendingEvents=[];
 let onlinePendingActions=[];
+const pendingActionAudio=new Map();
+const ACTION_AUDIO={
+ 'buy-seed':['seed_purchase'],'buy-decor':['decoration_purchase'],'buy-pack':['decoration_purchase'],
+ 'sell-crop':['crop_sell'],'sell-pet':['companion_sell'],'sell-decor':['decoration_sell'],
+ 'place-decor':['decoration_place'],'remove-decor':['decoration_store'],
+ 'place-fence':['decoration_place'],'harvest-special':['companion_unlock'],'ship':['crop_sell']
+};
+let lastConfirmedLevel=1;
 let specialServerBusy=false;
 let specialSyncPhase=false,pendingSpecialPurchase=false;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -296,9 +305,24 @@ function serverCall(method,...args){return new Promise((resolve,reject)=>{
   runner[method](...args);
 });}
 function makeHistoryId(){return 'ev_'+now()+'_'+Math.random().toString(36).slice(2,12);}
-function recordOnlineAction(type,data={}){if(ONLINE&&onlineToken)onlinePendingActions.push({id:'act_'+now()+'_'+Math.random().toString(36).slice(2,14),type,data});}
+function recordOnlineAction(type,data={},events=null){
+ const sounds=events|| (type==='plant'?[data.crop==='special'?'special_plant':'planting']:(ACTION_AUDIO[type]||[]));
+ if(!ONLINE){for(const event of sounds)audio.play(event,{confirmed:true});return;}
+ if(!onlineToken)return;
+ const action={id:'act_'+now()+'_'+Math.random().toString(36).slice(2,14),type,data};
+ onlinePendingActions.push(action);if(sounds.length)pendingActionAudio.set(action.id,sounds);
+}
+function confirmActionAudio(actions){
+ for(const action of actions){for(const event of pendingActionAudio.get(action.id)||[])audio.play(event,{confirmed:true});pendingActionAudio.delete(action.id);}
+}
+function confirmProfileLevel(profile){
+ const level=Number(profile?.level);if(!Number.isFinite(level))return;
+ if(level>lastConfirmedLevel){audio.play('level_up',{confirmed:true});if(rankForLevel(level).index>rankForLevel(lastConfirmedLevel).index)audio.play('rank_up',{confirmed:true});}
+ lastConfirmedLevel=level;
+}
 function stopOnlineSession(message){
  const token=onlineToken;onlineToken=null;onlineDirty=false;onlinePendingActions=[];onlinePendingEvents=[];
+ pendingActionAudio.clear();audio.stop();
  clearTimeout(onlineSaveTimer);closeModal();playing=false;
  $('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
  $('loginError').textContent=message;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');
@@ -327,6 +351,8 @@ async function combinedMagicCall(method,args){
   onlineRevision=result.revision;
   onlinePendingEvents=onlinePendingEvents.filter(x=>!events.includes(x));
   onlinePendingActions=onlinePendingActions.filter(x=>!actions.includes(x));
+  confirmActionAudio(actions);
+  confirmProfileLevel(result.profile);
   if(onlinePendingEvents.length||onlinePendingActions.length)onlineDirty=true;
   acceptAuthoritativeProfile(result.profile);
   onlineSaveAt=now();
@@ -351,9 +377,12 @@ async function flushOnline(){
  try{
   const response=await serverCall('studentSave',token,JSON.stringify(copy),events,rev,actions);
   if(response?.conflict||response?.rejected){stopOnlineSession('Progress changed or could not be verified. Log in again to load the saved game.');return false;}
+  if(response?.ok!==true)throw Error('Progress was not confirmed.');
   onlineRevision=response.revision;
   onlinePendingEvents=onlinePendingEvents.filter(x=>!events.includes(x));
   onlinePendingActions=onlinePendingActions.filter(x=>!actions.includes(x));
+  confirmActionAudio(actions);
+  confirmProfileLevel(response.profile);
   if(onlinePendingEvents.length||onlinePendingActions.length)onlineDirty=true;
   acceptAuthoritativeProfile(response.profile);
   console.info('[Vocab Farm] studentSave round trip: '+Math.round(performance.now()-started)+' ms',response.timing||{});
@@ -673,38 +702,48 @@ function toast(msg,bad=false){const el=document.createElement('div');el.classNam
 
 // --------------------------- Interface ---------------------------
 function openModal(title,html,kicker='VOCAB FARM ISLAND',id='generic'){
+ const wasHidden=$('modalOverlay').classList.contains('hidden');
  const preserveScroll=(id==='shop'||id==='decor-shop') && activeModal===id && !$('modalOverlay').classList.contains('hidden');
  const bodyScroll=preserveScroll?$('modalBody').scrollTop:0;
  const panelScroll=preserveScroll?$('modalPanel').scrollTop:0;
  activeModal=id;$('modalPanel').dataset.mode=id;$('modalPanel').dataset.ready='false';$('modalTitle').textContent=title;$('modalEyebrow').textContent=kicker;$('modalBody').innerHTML=html;
  $('modalOverlay').classList.remove('hidden');$('modalPanel').scrollTop=preserveScroll?panelScroll:0;$('modalBody').scrollTop=preserveScroll?bodyScroll:0;keys.clear();touchDirs.clear();resetJoystick();path=[];autoAction=null;
+ if(wasHidden)audio.play(id==='shop'?'shop_enter':id==='companions'?'collection_open':id==='house'?'farmhouse_enter':'menu_open');
  if(id==='plant-exposure'){$('modalPanel').focus({preventScroll:true});}else{$('modalClose').focus({preventScroll:true});}
 }
 function closeModal(){if(activeModal==='plant-exposure'&&now()<plantReadUntil)return;
  if(plantReadTicker){clearInterval(plantReadTicker);plantReadTicker=null;}
  plantReadUntil=0;
- if($('modalOverlay').classList.contains('hidden'))return;$('modalOverlay').classList.add('hidden');activeModal='';qContext=null;$('gameCanvas').focus({preventScroll:true});}
+ if($('modalOverlay').classList.contains('hidden'))return;$('modalOverlay').classList.add('hidden');activeModal='';qContext=null;audio.play('menu_close');$('gameCanvas').focus({preventScroll:true});}
 // Tap-to-play pronunciation uses the device's Web Speech voices, not the IPA glyphs.
 // en-GB is requested; if no UK voice is installed, we cannot guarantee the accent.
+let activeVoiceRelease=null;
+function speakGameText(text,language,rate=.9,voice=null){
+ if(!audio.canSpeak()||!('speechSynthesis' in window)||!('SpeechSynthesisUtterance' in window))return false;
+ if(activeVoiceRelease)activeVoiceRelease();window.speechSynthesis.cancel();
+ const utterance=new SpeechSynthesisUtterance(String(text));utterance.lang=language;utterance.rate=rate;utterance.volume=audio.getPreferences().voiceVolume;
+ if(voice)utterance.voice=voice;
+ const release=audio.voiceStarted();activeVoiceRelease=release;
+ utterance.onend=utterance.onerror=()=>{release();if(activeVoiceRelease===release)activeVoiceRelease=null;};
+ try{window.speechSynthesis.speak(utterance);return true;}catch(_){release();activeVoiceRelease=null;return false;}
+}
 function speakVocabularyWord(word){
  if(!('speechSynthesis' in window)||!('SpeechSynthesisUtterance' in window)){
   toast('This browser cannot play pronunciation · Trình duyệt không hỗ trợ âm thanh.',true);return;
  }
+ if(!audio.canSpeak()){toast('Turn on speech in Audio Settings to hear pronunciation.',true);return;}
  const voiceList=window.speechSynthesis.getVoices();
  const uk=voiceList.find(v=>/^en[-_]GB$/i.test(v.lang))
     ||voiceList.find(v=>/^en/i.test(v.lang)&&/british|english uk|uk english/i.test(v.name));
- const utterance=new SpeechSynthesisUtterance(String(word));
- utterance.lang='en-GB';utterance.rate=.84;utterance.pitch=1;
- if(uk)utterance.voice=uk;
  if(!uk)toast('UK voice not installed; your device may use another English accent.',true);
- try{window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance)}
- catch(e){toast('Pronunciation is unavailable on this device.',true)}
+ if(!speakGameText(word,'en-GB',.84,uk))toast('Pronunciation is unavailable on this device.',true);
 }
 function wordCard(w,status='neutral'){
  const marker=status==='correct'?'<span class="mark-good">✓ </span>':status==='incorrect'?'<span class="mark-bad">× </span>':'';
  return `<div class="word-card"><div class="word-line">${marker}<strong>${escapeHTML(w.english)}</strong><button class="speak-word" type="button" data-pronounce="${escapeHTML(w.english)}" aria-label="Play British pronunciation of ${escapeHTML(w.english)}" title="Listen · Nghe phát âm Anh-Anh">🔊</button> <span class="word-ipa">${escapeHTML(w.ipa)} · ${escapeHTML(posLabel(w.pos))}</span>: <strong>${escapeHTML(w.meaning)}</strong></div><div class="example"><strong>Ví dụ:</strong> ${escapeHTML(w.example)}</div></div>`;
 }
 function showPlantVocabulary(word){
+ audio.play('word_appear');
  if(plantReadTicker){clearInterval(plantReadTicker);plantReadTicker=null;}
  plantReadUntil=now()+8000;
  const markup=`<div class="plant-reading-top"><strong>Read and learn · Đọc và học</strong><span class="plant-reading-clock" id="plantReadingClock" role="timer" aria-label="Minimum reading time remaining">0:08</span></div>${wordCard(word,'neutral')}<p id="plantReadingReady" class="plant-reading-ready" role="status" aria-live="polite"></p>`;
@@ -741,7 +780,7 @@ function showDecorationShop(){
  openModal('Island Decorations',`<div class="shop-intro"><div class="decor-shop-icon">🌺</div><div><strong>Decorate your island</strong><div class="shop-gold">${goldIconHTML()} ${state.gold} gold</div></div></div><h3 class="section-heading">Themed decoration packs</h3><div class="decor-pack-grid">${packCards}</div><h3 class="section-heading">Individual decorations</h3><div class="card-grid">${items}</div><div class="button-row"><button class="secondary-btn" data-do="inventory">🎒 Bag & placement</button><button class="secondary-btn" data-do="shop">🌱 Seeds & fences</button></div>`,'DECORATION SHOP','decor-shop');
 }
 function buyDecoration(id){
- const item=DECOR_BY_ID[id];if(!item||RETIRED_DECOR_IDS.has(id))return toast('This decoration is no longer sold.',true);if(state.gold<item.price)return toast('Not enough gold.',true);
+ const item=DECOR_BY_ID[id];if(!item||RETIRED_DECOR_IDS.has(id))return toast('This decoration is no longer sold.',true);if(state.gold<item.price){audio.play('insufficient_gold');return toast('Not enough gold.',true);}
  state.gold-=item.price;state.decorStock[id]=(state.decorStock[id]||0)+1;recordOnlineAction('buy-decor',{item:id});save();updateHUD();showDecorationShop();toast(`${item.name} added to your bag!`);
 }
 function buyDecorationPack(id){
@@ -752,7 +791,7 @@ function buyDecorationPack(id){
 
 async function buySpecialSeed(){
  if(specialServerBusy)return;
- if(!canBuySpecial()){toast('Level 5 and 300 gold are required.',true);return;}
+ if(!canBuySpecial()){audio.play('insufficient_gold');toast('Level 5 and 300 gold are required.',true);return;}
  if(ONLINE){
   specialServerBusy=true;
   pendingSpecialPurchase=true;showShop();
@@ -765,7 +804,7 @@ async function buySpecialSeed(){
     state.seeds.special=result.specialSeeds+((state.seeds.special||0)-result.clientAtRequest.specialSeeds);
    }
    state.specialSeedLastPurchase=result.day;
-   updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Special Seed saved to Google Sheets');toast('Purchased 1 Special Seed!');
+   updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Special Seed saved to Google Sheets');audio.play('special_purchase',{confirmed:true});toast('Purchased 1 Special Seed!');
   }catch(err){toast('Special Seed purchase not confirmed: '+(err?.message||err),true);}
   finally{pendingSpecialPurchase=false;specialServerBusy=false;refreshSpecialSeedViews();if(onlineDirty){clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},100);}}
   return;
@@ -779,7 +818,7 @@ function refreshSpecialSeedViews(){
 }
 function buyFence(){if(state.gold<FENCE_PRICE)return;state.gold-=FENCE_PRICE;state.fenceStock++;recordOnlineAction('buy-fence');save();updateHUD();showShop();}
 function canRescue(){const seeds=Object.values(state.seeds).reduce((a,b)=>a+b,0),harvest=Object.values(state.harvest).reduce((a,b)=>a+b,0),growing=state.plots.some(p=>p.crop);return state.gold<CROPS.carrot.seed&&seeds===0&&harvest===0&&!growing;}
-function buySeed(id){const c=CROPS[id];if(!c||state.level<c.level||state.gold<c.seed){toast('Not enough gold or level to buy this seed.',true);return;}state.gold-=c.seed;state.seeds[id]=(state.seeds[id]||0)+1;recordOnlineAction('buy-seed',{crop:id});save();updateHUD();toast(`Purchased 1 ${c.name} seed!`);showShop()}
+function buySeed(id){const c=CROPS[id];if(!c||state.level<c.level||state.gold<c.seed){audio.play('insufficient_gold');toast('Not enough gold or level to buy this seed.',true);return;}state.gold-=c.seed;state.seeds[id]=(state.seeds[id]||0)+1;recordOnlineAction('buy-seed',{crop:id});save();updateHUD();toast(`Purchased 1 ${c.name} seed!`);showShop()}
 function getRescue(){if(!canRescue()){toast('Emergency seed is only available when you cannot continue farming.');return;}state.seeds.carrot=1;recordOnlineAction('rescue');save();toast('One free carrot seed is ready!');showShop()}
 function showDevTools(){
  if(!state)return;
@@ -841,6 +880,7 @@ async function teacherTestAction(action,value){
   if(!response?.ok)throw Error('The test change was not confirmed.');
   onlineRevision=response.revision;
   state=VFIRecovery.migrateProfile(response.profile,newProfile(state.id),state.id);
+  lastConfirmedLevel=Number(state.level)||lastConfirmedLevel;
   ensureCompanionState();updateHUD();setSaveState('saved','✓ Saved to Google Sheets');showDevTools();toast('Test profile updated.');
  }catch(err){toast('Test change failed: '+(err?.message||err),true);}
  finally{onlineTestBusy=false;specialServerBusy=false;if(onlineDirty){clearTimeout(onlineSaveTimer);onlineSaveTimer=setTimeout(()=>{void flushOnline();},100);}}
@@ -957,6 +997,7 @@ async function finishSpecialReveal(index,questionContext=null,actionDone=null){
   if(!liveCrop)throw Error('Saved crop is missing. Log in again.');
   Object.assign(liveCrop,result.crop);delete liveCrop.pendingReveal;
   const pxy=CROP_PLOT(index);spawnEffect('growth_transformation',pxy.x+pxy.width/2,pxy.y+40);
+  audio.play('newborn_transform',{confirmed:true});
   updateHUD();setSaveState(onlineDirty?'pending':'saved',onlineDirty?'● More changes awaiting sync':'✓ Saved to Google Sheets');
   const word=questionContext?.word;
   const message=`${petById(liveCrop).name} (${companionStars(liveCrop.rarity)}) revealed!`;
@@ -982,7 +1023,7 @@ function unlockPlot(i){if(i!==nextLockedPlot())return;
  syncDaily();
  const rule=PLOT_UNLOCKS[i];if(!rule)return;
  if(state.level<rule.level){toast(`Reach Level ${rule.level} to unlock Plot ${i+1}.`,true);showPlot(i);return;}
- if(state.gold<rule.price){toast(`Need ${rule.price} gold to unlock Plot ${i+1}.`,true);showPlot(i);return;}
+ if(state.gold<rule.price){audio.play('insufficient_gold');toast(`Need ${rule.price} gold to unlock Plot ${i+1}.`,true);showPlot(i);return;}
  state.gold-=rule.price;
  state.plots[i].unlocked=true;
  recordOnlineAction('unlock',{plot:i});save();updateHUD();toast(`Plot ${i+1} unlocked for ${rule.price} gold!`);showPlot(i);
@@ -1041,7 +1082,25 @@ function showCompanionDetail(characterId){
   <div class="button-row"><button class="secondary-btn" data-do="companions">← Back to Collection</button></div>
  `,'COMPANION DETAILS · WORD PRACTICE','companion-detail');
 }
-function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}${ONLINE&&onlineTestMode?'<button class="secondary-btn" data-do="dev-tools">🧪 Test controls</button>':''}<button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div>`,'YOUR FARM • PERSONAL PROGRESS','house');}
+function audioSettingRow(label,toggle,volume,prefs){
+ const percent=Math.round(prefs[volume]*100);
+ return `<div class="audio-setting"><label for="audio-${toggle}"><input id="audio-${toggle}" type="checkbox" data-audio-toggle="${toggle}" ${prefs[toggle]?'checked':''}>${label}</label><div class="audio-range"><input id="audio-${volume}" type="range" min="0" max="100" step="1" value="${percent}" data-audio-volume="${volume}" aria-label="${label} volume" aria-describedby="audio-value-${volume}"><output id="audio-value-${volume}" for="audio-${volume}">${percent}%</output></div></div>`;
+}
+function showAudioSettings(){
+ const prefs=audio.getPreferences();
+ openModal('Audio Settings',`<p class="muted">Your audio choices are saved on this device.</p>
+ ${audioSettingRow('Music','music','musicVolume',prefs)}
+ ${audioSettingRow('Sound effects','effects','effectsVolume',prefs)}
+ ${audioSettingRow('Pronunciation & companion speech','voice','voiceVolume',prefs)}
+ ${audioSettingRow('Environment','environment','environmentVolume',prefs)}
+ <p class="audio-settings-note">Environment is off by default. The speaker button mutes or unmutes everything. If your browser blocks automatic playback, tap anywhere in the game to start it.</p>`,'SOUND · DEVICE SETTINGS','audio-settings');
+}
+function updateAudioButton(prefs){const button=$('audioButton');if(!button)return;
+ button.textContent=prefs.muted?'🔇':'🔊';button.setAttribute('aria-pressed',String(prefs.muted));
+ button.setAttribute('aria-label',`${prefs.muted?'Unmute':'Mute'} all audio; hold for Audio Settings`);
+ button.title=`${prefs.muted?'Unmute':'Mute'} audio. Hold for Audio Settings.`;
+}
+function showHouse(){syncDaily();openModal('Your Farmhouse',`<div class="module-intro">${img('assets/characters/girl/girl_portrait.png')}<div><h3>${escapeHTML(state.name)} • Level ${state.level}</h3><p class="rank-note">${rankForLevel(state.level).name} · ${rankForLevel(state.level).vi}</p></div></div><div class="stat-strip"><span class="stat-chip">${goldIconHTML()} ${state.gold} gold</span><span class="stat-chip">⭐ ${state.xpTotal} lifetime XP</span><span class="stat-chip">📚 ${state.history.length} answers logged</span><span class="stat-chip">🌱 ${state.plots.filter(p=>p.unlocked).length}/10 plots</span></div><h3 class="section-heading">Achievements</h3>${badgeGrid()}<div class="button-row"><button class="primary-btn" data-do="missions">📅 Daily & Weekly</button><button class="secondary-btn" data-do="ranks">🏅 All ranks</button><button class="secondary-btn" data-do="history">📖 Answer history</button><button class="secondary-btn" data-do="audio-settings">🔊 Audio Settings</button>${ONLINE?'':'<button class="primary-btn" data-do="recovery">🛟 Backup & Recovery</button>'}${ONLINE&&onlineTestMode?'<button class="secondary-btn" data-do="dev-tools">🧪 Test controls</button>':''}<button class="secondary-btn" data-do="log-out">↩ Log out · Đăng xuất</button></div>`,'YOUR FARM • PERSONAL PROGRESS','house');}
 
 // -------------------- Vocabulary questions --------------------
 function editDistance(a,b){a=slug(a);b=slug(b);const dp=Array(b.length+1).fill(0).map((_,i)=>i);for(let i=1;i<=a.length;i++){let prev=dp[0];dp[0]=i;for(let j=1;j<=b.length;j++){let temp=dp[j];dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=temp;}}return dp[b.length]}
@@ -1205,7 +1264,7 @@ function configureSpellingField(q){
  update();
  if(!matchMedia('(pointer: coarse)').matches)focusSlot(0);
 }
-function chooseAnswer(i){if(!qContext||qContext.question.type==='spelling')return;qContext.selection=i;document.querySelectorAll('[data-choice]').forEach(el=>{const yes=Number(el.dataset.choice)===i;el.classList.toggle('selected',yes);el.setAttribute('aria-pressed',String(yes));});$('submitAnswer').disabled=false}
+function chooseAnswer(i){if(!qContext||qContext.question.type==='spelling')return;qContext.selection=i;audio.play('answer_select');document.querySelectorAll('[data-choice]').forEach(el=>{const yes=Number(el.dataset.choice)===i;el.classList.toggle('selected',yes);el.setAttribute('aria-pressed',String(yes));});$('submitAnswer').disabled=false}
 function clearAnswer(){if(!qContext)return;if(qContext.question.type==='spelling'){qContext._clearSpelling?.();}
  else{qContext.selection=null;document.querySelectorAll('[data-choice]').forEach(el=>{el.classList.remove('selected');el.setAttribute('aria-pressed','false');});$('submitAnswer').disabled=true}}
 function logQuestionAttempt(word,source,stage,answer,correct,attempt,expected){const entry={eventId:makeHistoryId(),time:now(),source,stage,wordId:word.id,linguisticPos:word.pos,word:`${word.english} (${posLabel(word.pos)})`,answer,expected,correct,attempt};state.history.push(entry);if(state.history.length>3000)state.history=state.history.slice(-3000);if(!ONLINE)void VFIRecovery.archiveAttempt(state.id,entry);if(ONLINE)onlinePendingEvents.push(entry);}
@@ -1219,7 +1278,7 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
   if(entry.answers[q.word.id])return;
   entry.answers[q.word.id]={time:now(),correct,answer:given};const reward=weekly?5:3;
   if(correct){entry.correct++;state.gold+=reward;}
-  logQuestionAttempt(q.word,weekly?'Weekly challenge':'Daily challenge','English → Vietnamese',given,correct,1,correctValue);recordOnlineAction('challenge',{kind:q.kind,wordId:q.word.id,answer:given});checkBadges();save();if(ONLINE)flushOnline();updateHUD();
+  logQuestionAttempt(q.word,weekly?'Weekly challenge':'Daily challenge','English → Vietnamese',given,correct,1,correctValue);recordOnlineAction('challenge',{kind:q.kind,wordId:q.word.id,answer:given},[correct?'correct_answer':'incorrect_answer']);checkBadges();save();if(ONLINE)flushOnline();updateHUD();
   // Stay in Challenges after answering instead of opening a closable feedback popup.
   // The answered question shows a compact result in-place.
   const result={kind:q.kind,index:q.dailyIndex,correct,reward};
@@ -1227,7 +1286,8 @@ async function submitAnswer(){if(specialServerBusy)return;const q=qContext;if(!q
  }
  const plot=state.plots[q.plotIndex],crop=plot?.crop;if(!crop)return;
  const attempt=crop.wrong+1;
- logQuestionAttempt(q.word,'Farm',crop.type==='special'?SPECIAL_ACTIONS[crop.stage]:ACTIONS[crop.stage],given,correct,attempt,correctValue);recordOnlineAction('answer',{plot:q.plotIndex,answer:given});
+ const careAudio=crop.type==='special'?['watering','companion_care','give_milk','feed_meal'][crop.stage]:['watering','tending','fertilizing','harvesting'][crop.stage];
+ logQuestionAttempt(q.word,'Farm',crop.type==='special'?SPECIAL_ACTIONS[crop.stage]:ACTIONS[crop.stage],given,correct,attempt,correctValue);recordOnlineAction('answer',{plot:q.plotIndex,answer:given},correct?['correct_answer',careAudio]:['incorrect_answer']);
  if(!correct){crop.wrong++;crop.retryAfter=now()+10000;save();if(ONLINE)flushOnline();
   const spellingReview=q.question.type==='spelling'?`<div class="feedback bad"><strong>Correct spelling · Đáp án đúng:</strong> ${escapeHTML(correctValue)}</div>`:'';
   openModal('',`<div class="answer-result incorrect"><span class="wrong-x">×</span> Incorrect</div>${spellingReview}<div class="button-row"><button id="retryNow" class="primary-btn" data-do="retry-plot" data-index="${q.plotIndex}" disabled>Try again</button></div>`,'','retry');return;
@@ -1538,17 +1598,17 @@ function canPlayerStand(x,y){return canStand(x,y)&&!blockedByDecorations(x,y);}
 function finalizePlacement(pos){const mode=placementMode;if(!mode)return false;
  if(mode.kind==='decor'){
   const item=DECOR_BY_ID[mode.item],point=snapDecoration(pos),ignore=mode.mode==='move'?mode.index:-1;
-  if(!validateDecoration(item,point.x,point.y,ignore)){toast('Choose open ground away from other objects.',true);return true;}
+  if(!validateDecoration(item,point.x,point.y,ignore)){audio.play('placement_error');toast('Choose open ground away from other objects.',true);return true;}
   if(mode.mode==='move'){if(!state.decorations[mode.index])return true;state.decorations[mode.index]={id:mode.item,x:point.x,y:point.y};}
   else{if(!(state.decorStock[mode.item]>0))return true;state.decorStock[mode.item]--;state.decorations.push({id:mode.item,x:point.x,y:point.y});recordOnlineAction('place-decor',{item:mode.item});}
   setPlacementMode(null);save();toast(`${item.name} placed! Long-press to move or remove.`);return true;
  }
  if(mode.kind==='pet'){
-  const pet=state.companions[mode.index];if(!pet||!canPetStand(pos.x,pos.y)){toast('Choose open ground away from the fence posts.',true);return true;}
+  const pet=state.companions[mode.index];if(!pet||!canPetStand(pos.x,pos.y)){audio.play('placement_error');toast('Choose open ground away from the fence posts.',true);return true;}
   pet.x=pos.x;pet.y=pos.y;pet.safePosition={x:pos.x,y:pos.y};pet.fenceHome={x:pos.x,y:pos.y};pet.target=null;pet.moveAt=now()+1800;pet.dir='down';setPlacementMode(null);save();toast('Companion relocated.');return true;
  }
  const f=snapFence(pos,mode.dir||'h',mode.mode==='move'?mode.index:-1);
- if(!validateFence(f,mode.mode==='move'?mode.index:-1)){toast('Cannot place here. Choose another grid segment.',true);return true;}
+ if(!validateFence(f,mode.mode==='move'?mode.index:-1)){audio.play('placement_error');toast('Cannot place here. Choose another grid segment.',true);return true;}
  if(mode.mode==='move'){if(!state.fences[mode.index]){setPlacementMode(null);return true;}state.fences[mode.index]=f;}
  else{if(state.fenceStock<1){setPlacementMode(null);return true;}state.fences.push(f);state.fenceStock--;recordOnlineAction('place-fence');}
  resetCompanionFenceAnchors();
@@ -1662,7 +1722,8 @@ function speakPet(pet,lang){
  petSpeech={petId:pet.id,text:message,expires:t+Math.min(10000,Math.max(4500,message.length*103))};
  $('petSpeechText').textContent=message;$('petSpeechBubble').setAttribute('lang',lang);
  save(); // Keep this companion's phrase rotation across offline demo reloads.
- // No pet voice playback: text only, in English or Vietnamese.
+ audio.play('companion_tap');
+ speakGameText(message,lang==='vi'?'vi-VN':'en-GB',.92);
 }
 function handlePetTap(index){const pet=state.companions[index];if(!pet)return;
  const t=now();if(lastPetClick&&lastPetClick.id===pet.id&&t-lastPetClick.time<340){
@@ -1785,7 +1846,7 @@ async function deliberatelyStartFresh(){
 }
 
 // -------------------- Events, persistence, and frame loop --------------------
-function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(speaker){speakVocabularyWord(speaker.dataset.pronounce);return;}const option=e.target.closest('[data-choice]');if(option){chooseAnswer(Number(option.dataset.choice));return;}const btn=e.target.closest('[data-do]');if(!btn||btn.disabled)return;const action=btn.dataset.do,id=btn.dataset.crop,index=Number(btn.dataset.index);
+function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(speaker){speakVocabularyWord(speaker.dataset.pronounce);return;}const option=e.target.closest('[data-choice]');if(option){chooseAnswer(Number(option.dataset.choice));return;}const btn=e.target.closest('[data-do]');if(!btn||btn.disabled)return;const action=btn.dataset.do,id=btn.dataset.crop,index=Number(btn.dataset.index);audio.play('button_click');
  if(ONLINE&&((action==='dev-tools'&&!onlineTestMode)||action.startsWith('dev-')||(action.startsWith('test-')&&!onlineTestMode)||action.startsWith('recovery')||action==='export-save'||action==='export-template')){toast('This tool is unavailable for this profile.',true);return;}
  if(ONLINE&&specialServerBusy&&!['close','shop','inventory','owned-seeds','companions','companion-detail'].includes(action)){toast('Finish the pending game action first.',true);return;}
  switch(action){
@@ -1820,6 +1881,7 @@ function dispatchClick(e){const speaker=e.target.closest('[data-pronounce]');if(
  case 'missions':showMissions();break;
  case 'ranks':showRanks();break;
  case 'history':showHistory();break;
+ case 'audio-settings':showAudioSettings();break;
  case 'recovery':showRecovery();break;
  case 'recovery-snapshot':void saveRecoverySnapshot();break;
  case 'recovery-export':void exportRecoveryFile();break;
@@ -1869,8 +1931,22 @@ async function logoutStudent(){
   if(onlineBusy||onlineDirty&&!(await flushOnline())){toast('Progress has not synced. Please retry logout after the save succeeds.',true);return;}
   try{await serverCall('studentLogout',onlineToken);}catch(err){toast('Could not revoke the session. Please retry logout.',true);return;}
  }
- closeModal();playing=false;$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
+ closeModal();playing=false;audio.stop();pendingActionAudio.clear();$('gameShell').classList.add('hidden');$('loginScreen').classList.remove('hidden');$('passcode').value='';
  toast(ONLINE?'Logged out.':'Logged out of the local demo.');onlineToken=null;onlineTestMode=false;document.body.classList.remove('teacher-test-mode');$('devToolsButton').classList.add('hidden');
+}
+const announcedCropAudio=new Set();
+function cropAudioKey(index,crop,kind){return `${kind}:${index}:${crop.wordId}:${crop.stage}:${kind==='retry'?crop.retryAfter:crop.nextDueAt}`;}
+function pollCropAudio(){
+ if(!state)return;
+ if(ONLINE&&(onlineDirty||onlineBusy||onlinePendingActions.length))return;
+ for(let i=0;i<state.plots.length;i++){
+  const crop=state.plots[i]?.crop;if(!crop)continue;
+  for(const [kind,at,event] of [['ready',crop.nextDueAt,'crop_ready'],['retry',crop.retryAfter,'retry_ready']]){
+   if(!at||at>now())continue;
+   const key=cropAudioKey(i,crop,kind);if(announcedCropAudio.has(key))continue;
+   announcedCropAudio.add(key);audio.play(event);
+  }
+ }
 }
 function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el.textContent=countdownLong(Number(el.dataset.until)-now());});document.querySelectorAll('.live-countdown').forEach(el=>{let left=Number(el.dataset.until)-now();el.textContent=formatSeconds(left);});
  const readyTimer=document.querySelector('#modalPanel[data-mode="plot"] .live-countdown[data-index]');
@@ -1879,6 +1955,7 @@ function liveCounters(){document.querySelectorAll('.reset-live').forEach(el=>{el
  if(activeModal==='plot'){const b=document.querySelector('#modalBody [data-do="start-question"],#modalBody [data-do="finish-special-reveal"],#modalBody [data-do="harvest-special"]');if(b&&b.disabled){const i=Number(b.dataset.index),c=state.plots[i]?.crop;if(c&&now()>=c.retryAfter)b.disabled=false;}}
  if($('orderCountdown'))$('orderCountdown').textContent=formatSeconds(state.ordersExpire-now());
  if(now()>=state.ordersExpire&&state.orders.length){initOrders();if(activeModal==='harbour')showHarbour();}
+ pollCropAudio();audio.setNearHarbour(Math.hypot(player.x-245,player.y-1050)<270);
 }
 function frame(t){if(!playing)return;if(actionMotion)advanceFarmAction(t);const dt=Math.min(.055,(t-lastTime)/1000||0);lastTime=t;if($('modalOverlay').classList.contains('hidden'))updateMovement(dt);updateCompanions(dt);renderWorld();
  if(t-uiLast>450){const reset=syncDaily();if(reset&&activeModal==='missions')showMissions();updateHUD();liveCounters();uiLast=t;}
@@ -1897,7 +1974,8 @@ async function reloadOnlineWords(){if(!ONLINE||!onlineToken)return;
 function launchPlayer(slot){cameraManual=false;ensureCompanionState();clearPendingPetTap();setPlacementMode(null);petSpeech=null;worldPointerDown=null;clearTimeout(worldLongTimer);resetJoystick();player={x:state.position?.x||880,y:state.position?.y||495,dir:'down',moving:false,frame:0,animMs:0};
  if(!canStand(player.x,player.y)){const p=nearestValid({x:880,y:495});player.x=p.x;player.y=p.y;}
  initOrders();checkBadges();$('loginScreen').classList.add('hidden');$('gameShell').classList.remove('hidden');syncDaily();resize();camera.x=centeredCamera(player.x-viewW/(2*zoom),MAP.world.width,viewW/zoom);camera.y=centeredCamera(player.y-viewH/(2*zoom),MAP.world.height,viewH/zoom);
- preload();updateHUD();playing=true;lastTime=performance.now();requestAnimationFrame(frame);toast(`Welcome, ${state.name}!`);$('gameCanvas').focus();}
+ announcedCropAudio.clear();for(let i=0;i<state.plots.length;i++){const c=state.plots[i]?.crop;if(!c)continue;if(c.nextDueAt<=now())announcedCropAudio.add(cropAudioKey(i,c,'ready'));if(c.retryAfter&&c.retryAfter<=now())announcedCropAudio.add(cropAudioKey(i,c,'retry'));}
+ preload();updateHUD();playing=true;audio.start();audio.play('login_success',{confirmed:true});lastTime=performance.now();requestAnimationFrame(frame);toast(`Welcome, ${state.name}!`);$('gameCanvas').focus();}
 function loginIdToInternal_(loginId){
  if(!/^\d{1,6}$/.test(loginId)||Number(loginId)<1)throw Error('Enter your student number (1–6 digits).');
  return String(Number(loginId)).padStart(2,'0');
@@ -1911,7 +1989,7 @@ async function beginGame(){let slot;const loginId=$('studentSelect').value.trim(
  try{
   if(ONLINE){const resp=await serverCall('studentLogin',loginId,pin);
    slot=String(resp.profile?.id||'');if(!/^0[1-9]$|^1[01]$/.test(slot))throw Error('The online profile is unavailable. Please contact your teacher.');
-   onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];onlinePendingActions=[];bank=resp.words||[];setCompanionRegistry(resp.companionRegistry);
+   onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;lastConfirmedLevel=Number(resp.profile?.level)||1;onlineDirty=false;onlinePendingEvents=[];onlinePendingActions=[];pendingActionAudio.clear();bank=resp.words||[];setCompanionRegistry(resp.companionRegistry);
    onlineTestMode=resp.testMode===true&&slot==='11';document.body.classList.toggle('teacher-test-mode',onlineTestMode);$('devToolsButton').classList.toggle('hidden',!onlineTestMode);
    if(!resp.profile)throw Error('The online profile is unavailable. No replacement account will be created.');state=VFIRecovery.migrateProfile(resp.profile,newProfile(slot),slot);delete state.landTax;
    if(!state.plots||state.plots.length!==10)throw Error('Invalid online progress.');
@@ -1947,7 +2025,22 @@ function moveJoystick(e){const stick=$('movementJoystick');if(!stick||e.pointerI
  joystickVector={x:distance?dx/distance*strength:0,y:distance?dy/distance*strength:0};
  if(strength){path=[];autoAction=null;cameraManual=false;}
 }
+function bindAudioControls(){
+ const button=$('audioButton');let holdTimer=null,longOpened=false;
+ audio.onChange=updateAudioButton;updateAudioButton(audio.getPreferences());
+ button.addEventListener('pointerdown',e=>{if(e.button!==0)return;longOpened=false;clearTimeout(holdTimer);holdTimer=setTimeout(()=>{longOpened=true;showAudioSettings();},600);});
+ for(const event of ['pointerup','pointercancel','pointerleave'])button.addEventListener(event,()=>{clearTimeout(holdTimer);holdTimer=null;});
+ button.addEventListener('click',()=>{if(longOpened){longOpened=false;return;}audio.toggleMuted();});
+ button.addEventListener('contextmenu',e=>{e.preventDefault();clearTimeout(holdTimer);longOpened=true;showAudioSettings();});
+ button.addEventListener('keydown',e=>{if(e.key==='F2'||e.shiftKey&&(e.key==='Enter'||e.key===' ')){e.preventDefault();showAudioSettings();}});
+ $('modalBody').addEventListener('change',e=>{const key=e.target.dataset.audioToggle;if(key)audio.setPreference(key,e.target.checked);});
+ $('modalBody').addEventListener('input',e=>{const key=e.target.dataset.audioVolume;if(!key)return;audio.setPreference(key,Number(e.target.value)/100);const output=$('audio-value-'+key);if(output)output.textContent=e.target.value+'%';});
+ document.addEventListener('pointerdown',()=>audio.gesture(),{passive:true});
+ document.addEventListener('keydown',()=>audio.gesture());
+ document.addEventListener('visibilitychange',()=>audio.applyPlayback());
+}
 function bindEvents(){resize();window.addEventListener('resize',resize);$('studentSelect').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);const demo=$('demoPin');if(!ONLINE&&demo)demo.textContent=String(Number(e.target.value)||1).padStart(4,'0');$('loginError').textContent='';});
+ bindAudioControls();
  $('playButton').addEventListener('click',beginGame);$('recoverLoginButton').addEventListener('click',()=>{try{showRecovery(recoverySlot());}catch(e){$('loginError').textContent=e.message}});$('recoveryFileInput').addEventListener('change',handleRecoveryFile);$('updateLater').addEventListener('click',hideUpdateNotice);$('updateBackup').addEventListener('click',()=>{hideUpdateNotice();showRecovery();});$('passcode').addEventListener('keydown',e=>{if(e.key==='Enter')beginGame()});$('modalBody').addEventListener('click',dispatchClick);
  $('modalClose').addEventListener('click',closeModal);
  $('modalOverlay').addEventListener('pointerdown',e=>{if(e.target===$('modalOverlay')&&activeModal!=='plant-exposure')closeModal()});

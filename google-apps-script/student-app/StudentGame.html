@@ -67,6 +67,7 @@
       <span id="zoomValue" aria-live="polite">100%</span>
       <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
     </nav>
+    <button id="audioButton" class="audio-button" type="button" aria-label="Mute all audio; hold for audio settings" aria-pressed="false" title="Tap to mute. Hold for Audio Settings.">🔊</button>
     <div class="mobile-controls" aria-label="Touch movement controls">
       <div id="movementJoystick" class="movement-joystick" role="group" aria-label="Drag to move in any direction">
         <div class="joystick-knob" aria-hidden="true"></div>
@@ -86,6 +87,7 @@
   <script><?!= include("MapConfig"); ?></script>
   <script><?!= include("WalkMask"); ?></script>
   <script><?!= include("RecoveryCode"); ?></script>
+  <script><?!= include("AudioManager"); ?></script>
   <script><?!= include("GameCode"); ?></script>
   <noscript>This game needs JavaScript. Please enable JavaScript in your browser.</noscript>
 

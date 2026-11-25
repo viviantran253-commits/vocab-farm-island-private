@@ -1,0 +1,677 @@
+[
+  {
+    "file": "music/flowerbed_fields.mp3",
+    "original_filename": "flowerbed_fields.wav",
+    "original_archive_paths": [
+      "sounds/Special Seed and companions/flowerbed_fields.wav"
+    ],
+    "source_page": "https://opengameart.org/content/flowerbed-fields-loop",
+    "source_download_url": "",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "mp3",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 105.9788,
+    "bytes": 2120419,
+    "sha256": "323ff74b460e5fd7ebd48869f0b112b209506c0d3e713f922d9760ddc9e8b28a"
+  },
+  {
+    "file": "sfx/select_click.wav",
+    "original_filename": "ui_click_01.wav",
+    "original_archive_paths": [
+      "sounds/vocabulary_learning/ui_click_01.wav",
+      "sounds/Decorations/ui_click_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_click_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.0372,
+    "bytes": 3324,
+    "sha256": "2822335f6205931bd5d75ac03f66533caf5074f3064c96f2b0e7f9faf13ab221"
+  },
+  {
+    "file": "sfx/correct_answer.wav",
+    "original_filename": "ui_confirm_01.wav",
+    "original_archive_paths": [
+      "sounds/vocabulary_learning/ui_confirm_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_confirm_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.4933,
+    "bytes": 43556,
+    "sha256": "956d47aea80d93a266189471beb87ac7b376d9581659135027ff6827fb7d0f55"
+  },
+  {
+    "file": "sfx/gentle_error.wav",
+    "original_filename": "ui_cancel_01.wav",
+    "original_archive_paths": [
+      "sounds/vocabulary_learning/ui_cancel_01.wav",
+      "sounds/Interface/ui_cancel_01.wav",
+      "sounds/Decorations/ui_cancel_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_cancel_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.1802,
+    "bytes": 15938,
+    "sha256": "88e3f4c8cb87ab04d60591354aab4300c6aa621386a9e94c0a9c9637a90140b6"
+  },
+  {
+    "file": "sfx/ready_notification.wav",
+    "original_filename": "ui_notify_02.wav",
+    "original_archive_paths": [
+      "sounds/vocabulary_learning/ui_notify_02.wav",
+      "sounds/Special Seed and companions/ui_notify_02.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_notify_02.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.9124,
+    "bytes": 80520,
+    "sha256": "c56db94e6ba917d5355b9cca4d692bba10d6b3d97dc4fbd545520f2fa1434dff"
+  },
+  {
+    "file": "sfx/vocabulary_open.wav",
+    "original_filename": "ui_open_02.wav",
+    "original_archive_paths": [
+      "sounds/vocabulary_learning/ui_open_02.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_open_02.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.3739,
+    "bytes": 33024,
+    "sha256": "3df2766d25872898cea6d55eba79b2a19a81126a5d7e60a2e9eba6d0ba8861ce"
+  },
+  {
+    "file": "sfx/dialogue_blip.wav",
+    "original_filename": "ui_text_01.wav",
+    "original_archive_paths": [
+      "sounds/vocabulary_learning/ui_text_01.wav",
+      "sounds/Special Seed and companions/ui_text_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_text_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.0479,
+    "bytes": 4268,
+    "sha256": "efeb27276a6f41191ca435013c6b8c76f8050e58f7af572ef1aa5a8b7156dea0"
+  },
+  {
+    "file": "sfx/planting.wav",
+    "original_filename": "sfxmint-farming-tools-03.wav",
+    "original_archive_paths": [
+      "sounds/farming/sfxmint-farming-tools-03.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/farming-tools-03",
+    "source_download_url": "https://sfxmint.com/dl/farming-tools-03.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 1.5506,
+    "bytes": 273598,
+    "sha256": "41286c9f20e2bc5f3d42f9c14b47e8d692c9809f93067881049504a252d3cf91"
+  },
+  {
+    "file": "sfx/watering.wav",
+    "original_filename": "sfxmint-water-splash-66.wav",
+    "original_archive_paths": [
+      "sounds/farming/sfxmint-water-splash-66.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/water-splash-66",
+    "source_download_url": "https://sfxmint.com/dl/water-splash-66.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 3.0,
+    "bytes": 529278,
+    "sha256": "262c7ba4b479abd4ed6cb95b10d2ff52438bb30a0eaab2119b3a4e20fee085fd"
+  },
+  {
+    "file": "sfx/tending.wav",
+    "original_filename": "sfxmint-farming-tools-04.wav",
+    "original_archive_paths": [
+      "sounds/farming/sfxmint-farming-tools-04.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/farming-tools-04",
+    "source_download_url": "https://sfxmint.com/dl/farming-tools-04.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 2.5702,
+    "bytes": 453470,
+    "sha256": "3f461efaf28ade6eacf933cd7ae8e80ff889bfb1f84595f0094fc088b0f953e3"
+  },
+  {
+    "file": "sfx/fertilizing.wav",
+    "original_filename": "sfxmint-plant-growth-09.wav",
+    "original_archive_paths": [
+      "sounds/farming/sfxmint-plant-growth-09.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/plant-growth-09",
+    "source_download_url": "https://sfxmint.com/dl/plant-growth-09.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 1.9157,
+    "bytes": 338010,
+    "sha256": "3717f48f08d0921d4a8e31f47a5af040a30ed6ed42faf4774c1c19acc09b81ae"
+  },
+  {
+    "file": "sfx/harvesting.wav",
+    "original_filename": "sfxmint-farming-tools-08.wav",
+    "original_archive_paths": [
+      "sounds/farming/sfxmint-farming-tools-08.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/farming-tools-08",
+    "source_download_url": "https://sfxmint.com/dl/farming-tools-08.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 1.342,
+    "bytes": 236814,
+    "sha256": "fa91d16da1f28fd25f100ebd53beccf93fc11dd44fc8686b4a96453f355ba577"
+  },
+  {
+    "file": "sfx/magic_sparkle.wav",
+    "original_filename": "pickup_gem_01.wav",
+    "original_archive_paths": [
+      "sounds/Interface/pickup_gem_01.wav",
+      "sounds/Shopping and economy/pickup_gem_01.wav",
+      "sounds/Special Seed and companions/pickup_gem_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/pickup/pickup_gem_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.7847,
+    "bytes": 69254,
+    "sha256": "bdf717e5cb613a2863cd050c7198ad747edde54b798ab99920f090fa75a028d5"
+  },
+  {
+    "file": "sfx/newborn_transform.wav",
+    "original_filename": "magic_cast_01.wav",
+    "original_archive_paths": [
+      "sounds/Special Seed and companions/magic_cast_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/magic/magic_cast_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.9632,
+    "bytes": 84998,
+    "sha256": "628a3cb2fe3eff641048490402cc20acc14d22524b34d19931314155b10aea92"
+  },
+  {
+    "file": "sfx/companion_care.wav",
+    "original_filename": "magic_heal_01.wav",
+    "original_archive_paths": [
+      "sounds/Special Seed and companions/magic_heal_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/magic/magic_heal_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 1.3833,
+    "bytes": 122052,
+    "sha256": "68b924790c2a6e51831176843a259807c59b5f6cdf61dab50abfcc0b9cf6f66b"
+  },
+  {
+    "file": "sfx/feed_meal.wav",
+    "original_filename": "sfxmint-food-crunch-01.wav",
+    "original_archive_paths": [
+      "sounds/Special Seed and companions/sfxmint-food-crunch-01.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/food-crunch-01",
+    "source_download_url": "https://sfxmint.com/dl/food-crunch-01.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 1.3131,
+    "bytes": 231710,
+    "sha256": "f040d3fc3c3af39519005c8b2b6aea868e2327af7552b18fec9fc840dbfd5e2c"
+  },
+  {
+    "file": "sfx/companion_growth.wav",
+    "original_filename": "pickup_powerup_01.wav",
+    "original_archive_paths": [
+      "sounds/Special Seed and companions/pickup_powerup_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/pickup/pickup_powerup_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.5622,
+    "bytes": 49630,
+    "sha256": "54cdf7fba6668ad5b2a727b980984fea2962d829d84a53c2e15939c3126986fe"
+  },
+  {
+    "file": "sfx/victory.wav",
+    "original_filename": "jingle_win_01.wav",
+    "original_archive_paths": [
+      "sounds/Shopping and economy/jingle_win_01.wav",
+      "sounds/Special Seed and companions/jingle_win_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/jingle/jingle_win_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 1.4436,
+    "bytes": 127368,
+    "sha256": "c1e15d07cac15ec9621ca09046d9349546231fd064102b8cf9ded68b953913ae"
+  },
+  {
+    "file": "sfx/companion_move.wav",
+    "original_filename": "magic_teleport_01.wav",
+    "original_archive_paths": [
+      "sounds/Special Seed and companions/magic_teleport_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/magic/magic_teleport_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.47,
+    "bytes": 41498,
+    "sha256": "3bac3645e1e51f366d4e536051e0cc11e6948c262a4da38dea99e7cacc3556e7"
+  },
+  {
+    "file": "sfx/shop_enter.wav",
+    "original_filename": "ui_notify_01.wav",
+    "original_archive_paths": [
+      "sounds/Shopping and economy/ui_notify_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_notify_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.815,
+    "bytes": 71928,
+    "sha256": "c59af4854933a1de0bc5ba2d539822ca80f8494292da89d7af0b8430a7f3691d"
+  },
+  {
+    "file": "sfx/coin_01.wav",
+    "original_filename": "pickup_coin_01.wav",
+    "original_archive_paths": [
+      "sounds/Shopping and economy/pickup_coin_01.wav",
+      "sounds/Shopping and economy/pickup_coin_01 (1).wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/pickup/pickup_coin_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.3416,
+    "bytes": 30170,
+    "sha256": "2b6d40ec34da9d42ec11f3baf93571f0e0f07dae3682b2748057d56e396dbc92"
+  },
+  {
+    "file": "sfx/coin_02.wav",
+    "original_filename": "pickup_coin_02.wav",
+    "original_archive_paths": [
+      "sounds/Shopping and economy/pickup_coin_02.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/pickup/pickup_coin_02.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.3056,
+    "bytes": 26998,
+    "sha256": "99c2472e2359c215982c89a2428b09da5c50d766c480a4a9b1db36b42377e54d"
+  },
+  {
+    "file": "sfx/coin_03.wav",
+    "original_filename": "pickup_coin_03.wav",
+    "original_archive_paths": [
+      "sounds/Shopping and economy/pickup_coin_03.wav",
+      "sounds/Shopping and economy/pickup_coin_03 (1).wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/pickup/pickup_coin_03.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.6006,
+    "bytes": 53020,
+    "sha256": "b8ee332fc3b0f3512ffda2e7a09d72a17e047b048c0dfebc0dac2e282d198e2f"
+  },
+  {
+    "file": "sfx/insufficient_gold.wav",
+    "original_filename": "ui_error_01.wav",
+    "original_archive_paths": [
+      "sounds/Shopping and economy/ui_error_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_error_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.2448,
+    "bytes": 21634,
+    "sha256": "3466f4a347b7873c9561f8f78bf1b5ae0c88bbb2fbbf81be3104216e508b7247"
+  },
+  {
+    "file": "sfx/level_up.wav",
+    "original_filename": "jingle_levelup_01.wav",
+    "original_archive_paths": [
+      "sounds/Shopping and economy/jingle_levelup_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/jingle/jingle_levelup_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 1.1891,
+    "bytes": 104922,
+    "sha256": "ee5bdae17bb7f570aba8497c17fb15a75d5eac449a2c9fd2282f93ff807d6bcd"
+  },
+  {
+    "file": "sfx/wood_step.wav",
+    "original_filename": "footstep_wood_01.wav",
+    "original_archive_paths": [
+      "sounds/Decorations/footstep_wood_01.wav",
+      "sounds/Movement and environment/footstep_wood_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/footstep/footstep_wood_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.0725,
+    "bytes": 6442,
+    "sha256": "1919590ad559c326e0bf0956cfd42622f1b312d10d3b4ef02c8c0deb43d8e5cc"
+  },
+  {
+    "file": "sfx/decoration_pickup.mp3",
+    "original_filename": "popup.mp3",
+    "original_archive_paths": [
+      "sounds/Decorations/popup.mp3"
+    ],
+    "source_page": "https://spritepilot.com/free-game-assets/sound-effects/interface",
+    "source_download_url": "https://spritepilot.com/free-assets/sound-effects/interface/popup.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "mp3",
+    "sample_rate": 48000,
+    "channels": 1,
+    "duration_seconds": 0.288,
+    "bytes": 7532,
+    "sha256": "a75a10566116e0937b5532bc56b2b5eaeea7e0d5a396a39205c11f2100fd93ab"
+  },
+  {
+    "file": "sfx/fence_rotate.mp3",
+    "original_filename": "toggle.mp3",
+    "original_archive_paths": [
+      "sounds/Decorations/toggle.mp3"
+    ],
+    "source_page": "https://spritepilot.com/free-game-assets/sound-effects/interface",
+    "source_download_url": "https://spritepilot.com/free-assets/sound-effects/interface/toggle.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "mp3",
+    "sample_rate": 48000,
+    "channels": 1,
+    "duration_seconds": 0.144,
+    "bytes": 4076,
+    "sha256": "1309e59509eb9c8f1dce17112374c650f6c2a9b0cc8abbbe243be752f81fe108"
+  },
+  {
+    "file": "sfx/menu_close.wav",
+    "original_filename": "ui_close_01.wav",
+    "original_archive_paths": [
+      "sounds/Interface/ui_close_01.wav",
+      "sounds/Decorations/ui_close_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_close_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.152,
+    "bytes": 13452,
+    "sha256": "a624758dc2ae499bedf5d49ecc118a6ec725b7cb47d35acd2bf41a98728e87d1"
+  },
+  {
+    "file": "sfx/login_success.wav",
+    "original_filename": "jingle_start_01.wav",
+    "original_archive_paths": [
+      "sounds/Interface/jingle_start_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/jingle/jingle_start_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 1.4289,
+    "bytes": 126070,
+    "sha256": "8f69ebbdd73cbfc6e940e13d15f90225baed2511b2b04e9b84df2ce8eb533360"
+  },
+  {
+    "file": "sfx/button_click.mp3",
+    "original_filename": "click.mp3",
+    "original_archive_paths": [
+      "sounds/Interface/click.mp3"
+    ],
+    "source_page": "https://spritepilot.com/free-game-assets/sound-effects/interface",
+    "source_download_url": "https://spritepilot.com/free-assets/sound-effects/interface/click.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "mp3",
+    "sample_rate": 48000,
+    "channels": 1,
+    "duration_seconds": 0.192,
+    "bytes": 5228,
+    "sha256": "31cc6685302f654cfd8e37c4795d01626c28dab30095d12b66b8be7d6f327baf"
+  },
+  {
+    "file": "sfx/menu_open.wav",
+    "original_filename": "ui_open_01.wav",
+    "original_archive_paths": [
+      "sounds/Interface/ui_open_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_open_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.152,
+    "bytes": 13452,
+    "sha256": "f7d85ca926888e3436c718f83291ea976b35c588818f8e1c6a77ba05ee1472fb"
+  },
+  {
+    "file": "sfx/tab_switch.wav",
+    "original_filename": "ui_click_02.wav",
+    "original_archive_paths": [
+      "sounds/Interface/ui_click_02.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_click_02.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.0546,
+    "bytes": 4856,
+    "sha256": "9ea4f1992ed0442f6fbad71d679e9e7bc9243c5222b976eb53dd649022fe3cd2"
+  },
+  {
+    "file": "sfx/collection_open.mp3",
+    "original_filename": "page-turn.mp3",
+    "original_archive_paths": [
+      "sounds/Interface/page-turn.mp3"
+    ],
+    "source_page": "https://spritepilot.com/free-game-assets/sound-effects/interface",
+    "source_download_url": "https://spritepilot.com/free-assets/sound-effects/interface/page-turn.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "mp3",
+    "sample_rate": 48000,
+    "channels": 1,
+    "duration_seconds": 0.888,
+    "bytes": 21932,
+    "sha256": "5c0f821a2a9c927faf06a69dcf1d4edcb76fbc9f5781aa16175af53757c13fe0"
+  },
+  {
+    "file": "sfx/audio_on.wav",
+    "original_filename": "ui_toggle_on_01.wav",
+    "original_archive_paths": [
+      "sounds/Interface/ui_toggle_on_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/ui/ui_toggle_on_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.121,
+    "bytes": 10718,
+    "sha256": "27116e653c4683fe13117dacf72f1f67e2b1ce28a61f8db222586c87d7fc52c2"
+  },
+  {
+    "file": "sfx/grass_step.wav",
+    "original_filename": "footstep_grass_01.wav",
+    "original_archive_paths": [
+      "sounds/Movement and environment/footstep_grass_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/footstep/footstep_grass_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.0936,
+    "bytes": 8302,
+    "sha256": "95c9a28db01eb08ba9159de1489615c80877e200c58d9a17d38da9d72b6888ff"
+  },
+  {
+    "file": "sfx/stone_step.wav",
+    "original_filename": "footstep_stone_01.wav",
+    "original_archive_paths": [
+      "sounds/Movement and environment/footstep_stone_01.wav"
+    ],
+    "source_page": "https://anyoneplaying.com/en/tools/free-sound-effects",
+    "source_download_url": "https://anyoneplaying.com/sfx/blip-boom/wav/footstep/footstep_stone_01.wav",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 1,
+    "duration_seconds": 0.0468,
+    "bytes": 4170,
+    "sha256": "88a269cfee9b50773685a0042bc6018ac595555d3abd9c633c865dafb0ea2a65"
+  },
+  {
+    "file": "environment/harbour_ambience.wav",
+    "original_filename": "sfxmint-ambience-ocean-56.wav",
+    "original_archive_paths": [
+      "sounds/Movement and environment/sfxmint-ambience-ocean-56.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/ambience-ocean-56",
+    "source_download_url": "https://sfxmint.com/dl/ambience-ocean-56.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 9.8607,
+    "bytes": 1739498,
+    "sha256": "56ff02ac207cea2b75024d585395b4cb2e4d850bcbc29fa7bd6566fba0b1562f"
+  },
+  {
+    "file": "sfx/farmhouse_enter.wav",
+    "original_filename": "sfxmint-door-open-01.wav",
+    "original_archive_paths": [
+      "sounds/Movement and environment/sfxmint-door-open-01.wav"
+    ],
+    "source_page": "https://sfxmint.com/sounds/door-open-01",
+    "source_download_url": "https://sfxmint.com/dl/door-open-01.mp3",
+    "license": "CC0 (source-declared; not independently reverified)",
+    "status": "ready",
+    "codec": "pcm_s16le",
+    "sample_rate": 44100,
+    "channels": 2,
+    "duration_seconds": 1.0,
+    "bytes": 176478,
+    "sha256": "9bdba9e4071b72c42e50994b4a36f98d0de6f3b9307472ee4742c0da90af8f16"
+  }
+]

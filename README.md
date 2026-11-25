@@ -25,6 +25,7 @@ Students type their number and private passcode on the login page. In the teache
 ## Code and updates
 
 - `assets/` contains every image used by the official game. The `assets/companions/registry.json` catalog lets the teacher add, replace, or disable companions through GitHub. See [COMPANIONS.md](COMPANIONS.md).
+- `assets/audio/` contains the approved music and sound effects. See [AUDIO.md](AUDIO.md) for controls and manual deployment steps.
 - Run `node scripts/validate-assets.mjs` before publishing assets. It checks every registered companion image, dimensions, references, and unused files.
 - `google-apps-script/student-app/` contains the live web app source. After editing it, copy changed files into the Apps Script project and **deploy a new version of the existing web app deployment**.
 - `google-apps-script/teacher-dashboard/` contains the separate Sheet-bound teacher dashboard source.

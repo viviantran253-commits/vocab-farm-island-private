@@ -765,3 +765,15 @@ body.teacher-test-mode .dev-menu-btn{display:flex!important;}
  .top-buttons .icon-btn{touch-action:manipulation}
  .zoom-controls{box-sizing:border-box;max-width:calc(100% - 16px);touch-action:manipulation}
 }
+
+/* Audio controls sit above the existing bottom navigation and zoom buttons. */
+.audio-button{position:absolute;z-index:8;right:max(12px,env(safe-area-inset-right));bottom:calc(64px + env(safe-area-inset-bottom));width:48px;height:48px;border:2px solid #ae8656;border-radius:14px;background:#fff7deeb;color:#4c3927;box-shadow:0 3px #84613d;font-size:25px;line-height:1;touch-action:manipulation;user-select:none}
+.audio-button[aria-pressed="true"]{background:#e8e3d9;color:#6c6660}
+.audio-setting{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 18px;align-items:center;padding:13px 0;border-bottom:1px solid #dfcba5}
+.audio-setting label{display:flex;gap:9px;align-items:center;font-weight:800;cursor:pointer}
+.audio-setting input[type="checkbox"]{width:20px;height:20px;accent-color:#357345}
+.audio-setting .audio-range{grid-column:1/-1;display:flex;align-items:center;gap:12px}
+.audio-setting input[type="range"]{flex:1;min-width:0;accent-color:#357345;touch-action:auto}
+.audio-setting output{min-width:42px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.audio-settings-note{font-size:13px;line-height:1.4;color:#6a5942;margin:14px 0 0}
+@media(max-width:720px){.audio-button{right:max(9px,env(safe-area-inset-right));bottom:calc(76px + env(safe-area-inset-bottom));width:46px;height:46px}.audio-setting{padding:10px 0}}

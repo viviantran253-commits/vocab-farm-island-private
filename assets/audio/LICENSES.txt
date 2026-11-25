@@ -1,0 +1,8 @@
+Source-declared CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+Flowerbed Fields — Zane Little Music: https://opengameart.org/content/flowerbed-fields-loop
+Retro sound effects: https://anyoneplaying.com/en/tools/free-sound-effects
+SpritePilot: https://spritepilot.com/free-game-assets/sound-effects/interface
+SFXMint: https://sfxmint.com/license (AI-generated or procedurally synthesized)
+Keep source records; not a guarantee of third-party rights.
+
+The source licenses are carried forward from the prior selection manifest, not independently verified against the uploaded bytes. The specific unidentified SFXMint recording has not been verified; keep it out of production until confirmed.

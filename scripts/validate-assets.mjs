@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 
 const root=path.resolve('assets');
 const registry=JSON.parse(fs.readFileSync(path.join(root,'companions/registry.json'),'utf8'));
@@ -46,6 +47,19 @@ for(const name of ['plot_tilled','plot_seeded','plot_watered','plot_fertilized',
 for(const direction of ['horizontal','vertical'])add(`fences/fence_${direction}.png`);
 add('environment/props/boat.png');add('items/currency/64/gold_coin.png');
 add('companions/registry.json');
+const audioRoot=path.join(root,'audio');
+const audioManifest=JSON.parse(fs.readFileSync(path.join(audioRoot,'asset_manifest.json'),'utf8'));
+const audioMap=JSON.parse(fs.readFileSync(path.join(audioRoot,'action_map.json'),'utf8'));
+const audioFiles=new Set();
+for(const entry of audioManifest){
+ if(entry.status!=='ready'||! /^(?:music|sfx|environment)\/[a-z0-9_./-]+\.(?:wav|mp3)$/.test(entry.file)||entry.file.includes('..')){errors.push(`Invalid audio entry: ${entry.file}`);continue;}
+ audioFiles.add(entry.file);add(`audio/${entry.file}`);
+ const file=path.join(audioRoot,entry.file);
+ if(fs.existsSync(file)&&createHash('sha256').update(fs.readFileSync(file)).digest('hex')!==entry.sha256)errors.push(`Audio checksum mismatch: ${entry.file}`);
+}
+for(const [event,file] of Object.entries(audioMap))if(file!==null&&!audioFiles.has(file))errors.push(`Unmapped or missing audio file for ${event}: ${file}`);
+for(const file of ['action_map.json','action_map.csv','asset_manifest.json','README.txt','LICENSES.txt'])add(`audio/${file}`);
+if(fs.existsSync(path.join(audioRoot,'review')))errors.push('Unverified audio/review must not be deployed');
 
 for(const relative of required)if(!fs.existsSync(path.join(root,relative)))errors.push(`Missing: assets/${relative}`);
 const all=walk(root).map(file=>path.relative(root,file).replaceAll(path.sep,'/'));

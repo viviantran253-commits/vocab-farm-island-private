@@ -1,0 +1,104 @@
+/* Audio preferences are device-local; no audio state is written to the teacher Sheet. */
+(() => {
+  'use strict';
+  const STORE_KEY='vfi_audio_preferences_v1';
+  const DEFAULTS={muted:false,music:true,effects:true,voice:true,environment:false,
+    musicVolume:.25,effectsVolume:.6,voiceVolume:.8,environmentVolume:.1};
+  const VOLUME_KEYS=new Set(['musicVolume','effectsVolume','voiceVolume','environmentVolume']);
+  const TOGGLE_KEYS=new Set(['music','effects','voice','environment']);
+  const safeVolume=value=>Math.max(0,Math.min(1,Number(value)||0));
+  const validPath=value=>typeof value==='string'&&/^(?:music|sfx|environment)\/[a-z0-9_./-]+\.(?:mp3|wav)$/.test(value)&&!value.includes('..');
+
+  class AudioManager {
+    constructor(){
+      let saved={};try{saved=JSON.parse(localStorage.getItem(STORE_KEY)||'{}')||{};}catch(_){}
+      this.prefs={...DEFAULTS};
+      for(const key of TOGGLE_KEYS)if(typeof saved[key]==='boolean')this.prefs[key]=saved[key];
+      for(const key of VOLUME_KEYS)if(Number.isFinite(Number(saved[key])))this.prefs[key]=safeVolume(saved[key]);
+      this.prefs.muted=saved.muted===true;
+      this.map={};this.active=false;this.nearHarbour=false;this.voiceCount=0;
+      this.effectQueue=[];this.effectBusy=false;this.effectGeneration=0;this.lastEffect=new Map();this.onChange=null;
+      this.music=new Audio();this.music.loop=true;this.music.preload='none';
+      this.environment=new Audio();this.environment.loop=true;this.environment.preload='none';
+      this.effect=new Audio();this.effect.preload='none';
+      this.effect.addEventListener('ended',()=>this.finishEffect());
+      this.effect.addEventListener('error',()=>this.finishEffect());
+      this.ready=this.loadMap();this.updateVolumes();
+    }
+    async loadMap(){
+      try{
+        const response=await fetch(new URL('assets/audio/action_map.json',document.baseURI),{mode:'cors',cache:'default'});
+        if(!response.ok)throw Error('Audio action map unavailable');
+        const data=await response.json();
+        for(const [event,path] of Object.entries(data))if(path===null||validPath(path))this.map[event]=path;
+        this.setSource(this.music,this.map.background_music);
+        this.setSource(this.environment,this.map.harbour_ambience);
+        if(this.active)this.startMusic();
+      }catch(error){console.warn('[Vocab Farm] Audio unavailable:',error);}
+    }
+    setSource(player,path){if(validPath(path))player.src=new URL('assets/audio/'+path,document.baseURI).href;}
+    persist(){try{localStorage.setItem(STORE_KEY,JSON.stringify(this.prefs));}catch(_){}this.onChange?.({...this.prefs});}
+    getPreferences(){return {...this.prefs};}
+    setPreference(key,value){
+      if(TOGGLE_KEYS.has(key))this.prefs[key]=Boolean(value);
+      else if(VOLUME_KEYS.has(key))this.prefs[key]=safeVolume(value);
+      else return;
+      if(key==='voice'&&!this.prefs.voice){try{window.speechSynthesis?.cancel();}catch(_){}this.voiceCount=0;}
+      this.updateVolumes();this.applyPlayback();this.persist();
+    }
+    setMuted(value){
+      this.prefs.muted=Boolean(value);
+      if(this.prefs.muted){this.effectQueue=[];this.effectGeneration++;this.effect.pause();this.effectBusy=false;
+        try{window.speechSynthesis?.cancel();}catch(_){}this.voiceCount=0;}
+      this.updateVolumes();this.applyPlayback();this.persist();
+      if(!this.prefs.muted)this.play('audio_on');
+    }
+    toggleMuted(){this.setMuted(!this.prefs.muted);}
+    updateVolumes(){
+      this.music.volume=this.prefs.musicVolume*(this.voiceCount?0.25:1);
+      this.effect.volume=this.prefs.effectsVolume;
+      this.environment.volume=this.prefs.environmentVolume;
+    }
+    applyPlayback(){
+      if(!this.active||this.prefs.muted||!this.prefs.music||document.hidden)this.music.pause();else this.startMusic();
+      if(!this.active||this.prefs.muted||!this.prefs.environment||!this.nearHarbour||document.hidden)this.environment.pause();else this.startEnvironment();
+      if(this.prefs.muted||!this.prefs.effects){this.effectQueue=[];this.effectGeneration++;this.effect.pause();this.effectBusy=false;}
+    }
+    start(){this.active=true;this.ready.then(()=>this.applyPlayback());this.onChange?.({...this.prefs});}
+    stop(){this.active=false;this.nearHarbour=false;this.effectQueue=[];this.effectGeneration++;this.effect.pause();this.effectBusy=false;this.music.pause();this.environment.pause();try{window.speechSynthesis?.cancel();}catch(_){}this.voiceCount=0;this.updateVolumes();}
+    gesture(){if(this.active)this.applyPlayback();}
+    startMusic(){if(!this.active||this.prefs.muted||!this.prefs.music||!this.music.src||document.hidden)return;
+      if(this.music.paused)void this.music.play().catch(()=>{});}
+    startEnvironment(){if(!this.active||this.prefs.muted||!this.prefs.environment||!this.nearHarbour||!this.environment.src||document.hidden)return;
+      if(this.environment.paused)void this.environment.play().catch(()=>{});}
+    setNearHarbour(value){if(this.nearHarbour===Boolean(value))return;this.nearHarbour=Boolean(value);this.applyPlayback();}
+    canSpeak(){return this.active&&!this.prefs.muted&&this.prefs.voice;}
+    voiceStarted(){
+      if(!this.canSpeak())return ()=>{};
+      this.voiceCount++;this.updateVolumes();let released=false;
+      return ()=>{if(released)return;released=true;this.voiceCount=Math.max(0,this.voiceCount-1);this.updateVolumes();};
+    }
+    play(event,{confirmed=false}={}){
+      if(!this.active||this.prefs.muted||!this.prefs.effects)return;
+      const last=this.lastEffect.get(event),time=performance.now();
+      if(last!==undefined&&time-last<180)return;this.lastEffect.set(event,time);
+      void this.ready.then(()=>{
+        if(!this.active||this.prefs.muted||!this.prefs.effects)return;
+        const path=this.map[event];if(!validPath(path))return;
+        if(this.effectBusy){if(confirmed&&this.effectQueue.length<8)this.effectQueue.push(path);return;}
+        this.playEffect(path);
+      });
+    }
+    playEffect(path){
+      this.effectBusy=true;const generation=++this.effectGeneration;this.setSource(this.effect,path);this.effect.volume=this.prefs.effectsVolume;
+      this.effect.currentTime=0;
+      void this.effect.play().catch(()=>{if(generation===this.effectGeneration)this.finishEffect();});
+    }
+    finishEffect(){
+      if(!this.effectBusy)return;this.effectBusy=false;
+      if(!this.active||this.prefs.muted||!this.prefs.effects){this.effectQueue=[];return;}
+      const next=this.effectQueue.shift();if(next)this.playEffect(next);
+    }
+  }
+  window.VFIAudio=new AudioManager();
+})();
