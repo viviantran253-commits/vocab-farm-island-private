@@ -1,4 +1,4 @@
-/** Vocab Farm Island v0.49: official student web app.
+/** Vocab Farm Island v0.50: official student web app.
  * Deploy as: Web app; Execute as: Me; Who has access: Anyone.
  * Keep Script Properties: SHEET_ID (private teacher Sheet),
  * ASSET_BASE_URL (https://USERNAME.github.io/REPO/ including trailing slash).
@@ -11,19 +11,82 @@ const HISTORY_TAB = '_History';
 const MAGIC_LEDGER_TAB = '_MagicLedger';
 const MAGIC_COST = 300;
 const TEACHER_TEST_ID = '11';
-const MAGIC_CHARACTERS = ['itadori_yuji','monkey_d_luffy','sakura_kinomoto','doraemon','pikachu','shin_chan','rudo','sakura_haruka','hoshina_soshiro','kamado_tanjiro','saitama','asuna_yuuki','himmel','frieren','krixi','veera','rouie','dolia','bijan','conan_edogawa','himekawa_yoshino','killua_zoldyck'];
 const VOCAB_PREFIX = 'Vocab_';
 const SESSION_TTL = 21600;  // 6 hours, CacheService maximum
 
 function include(filename) { return HtmlService.createTemplateFromFile(filename).getRawContent(); }
-function doGet() {
+function doGet(e) {
+  // Public, read-only probe for the public GitHub companion catalog.
+  if (e && e.parameter && e.parameter.health === 'companions') {
+    let status;
+    try {
+      const registry = companionRegistry_();
+      status = {ok:registry.source!=='fallback', source:registry.source||'live', assetVersion:registry.assetVersion,
+        companions:registry.characters.length,
+        enabled:registry.characters.filter(character => character.enabled).length};
+    } catch (_error) {
+      status = {ok:false, error:'Companion catalog unavailable'};
+    }
+    return ContentService.createTextOutput(JSON.stringify(status))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   const tpl = HtmlService.createTemplateFromFile('StudentGame');
   let base = PropertiesService.getScriptProperties().getProperty('ASSET_BASE_URL') || '';
   if (!/^https:\/\//.test(base)) return HtmlService.createHtmlOutput('<h2>Teacher setup needed</h2><p>Set ASSET_BASE_URL in Script Properties to the GitHub Pages URL for your game assets.</p>');
   // Keep the existing Script Property and deployment URL so older versions can roll back unchanged.
-  tpl.assetBaseUrl = base.replace(/\/*$/, '/') + 'staging/v0.42/';
+  tpl.assetBaseUrl = base.replace(/\/*$/, '/');
   return tpl.evaluate().setTitle('Vocab Farm Island')
     .addMetaTag('viewport','width=device-width, initial-scale=1, viewport-fit=cover');
+}
+function normalizeCompanionRegistry_(input){
+ if(!input||input.schemaVersion!==1||!Array.isArray(input.characters)||!input.characters.length||input.characters.length>100)throw Error('Invalid companion registry.');
+ const version=String(input.assetVersion||'');
+ if(!/^[A-Za-z0-9._-]{1,40}$/.test(version))throw Error('Invalid companion asset version.');
+ const seen=new Set(),characters=input.characters.map(raw=>{
+  const id=String(raw?.id||''),name=String(raw?.name||'').trim();
+  if(!/^[a-z][a-z0-9_]{1,39}$/.test(id)||seen.has(id)||!name||name.length>80||typeof raw.enabled!=='boolean'||(raw.portrait!==undefined&&typeof raw.portrait!=='boolean'))throw Error('Invalid companion entry: '+id);
+  seen.add(id);
+  if(!Array.isArray(raw.phrases)||raw.phrases.length<1||raw.phrases.length>5)throw Error('Invalid companion phrases: '+id);
+  const phrases=raw.phrases.map(phrase=>{
+   const en=String(phrase?.en||'').trim(),vi=String(phrase?.vi||'').trim();
+   if(!en||!vi||en.length>180||vi.length>180)throw Error('Invalid companion phrase: '+id);
+   return {en,vi};
+  });
+  return {id,name,enabled:raw.enabled,portrait:raw.portrait===true,phrases};
+ });
+ if(!characters.some(x=>x.enabled))throw Error('No companions are enabled.');
+ return {schemaVersion:1,assetVersion:version,characters};
+}
+function companionRegistry_(){
+ const cache=CacheService.getScriptCache(),key='companion_registry_v1',cached=cache.get(key);
+ if(cached)try{return JSON.parse(cached);}catch(error){console.warn('Companion cache invalid: '+error);}
+ try{
+  const base=PropertiesService.getScriptProperties().getProperty('ASSET_BASE_URL')||'';
+  if(!/^https:\/\//.test(base))throw Error('Asset URL is not configured.');
+  const url=base.replace(/\/*$/,'/')+'assets/companions/registry.json?minute='+Math.floor(Date.now()/60000);
+  const response=UrlFetchApp.fetch(url,{muteHttpExceptions:true,timeoutSeconds:10});
+  if(response.getResponseCode()!==200)throw Error('HTTP '+response.getResponseCode());
+  const body=response.getContentText();if(body.length>80000)throw Error('Companion registry is too large.');
+  const registry=normalizeCompanionRegistry_(JSON.parse(body));registry.source='live';
+  const json=JSON.stringify(registry);
+  cache.put(key,json,60);cache.put(key+'_last',json,21600);
+  return registry;
+ }catch(error){
+  const last=cache.get(key+'_last');if(last)try{return JSON.parse(last);}catch(_error){}
+  console.error('Companion registry unavailable: '+error);
+  if(typeof COMPANION_FALLBACK!=='undefined'){
+   const fallback=normalizeCompanionRegistry_(COMPANION_FALLBACK);
+   fallback.source='fallback';
+   return fallback;
+  }
+  throw Error('The companion catalog is unavailable. Please try again shortly.');
+ }
+}
+// Run once from the Apps Script editor as the deployment owner to grant UrlFetch access.
+function authorizeCompanionRegistry(){
+ ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
+ const registry=companionRegistry_();
+ return {assetVersion:registry.assetVersion,companions:registry.characters.length};
 }
 let openSheetCache_ = null;
 function data_() {
@@ -172,10 +235,10 @@ function studentLogin(loginNumber,pin){
   acSheet.getRange(acct.row,5,1,2).setValues([[0,0]]);
   accountName=String(latest[1]);accountVersion=String(latest[6]);
  }finally{lock.releaseLock();}
- const prof=readProgress_(ss,id,accountName);
+ const prof=readProgress_(ss,id,accountName),registry=companionRegistry_();
  const session=Utilities.getUuid()+Utilities.getUuid();
  CacheService.getScriptCache().put(sessionKey_(session),id+'|'+accountVersion,SESSION_TTL);
- return {session,revision:prof.revision,profile:prof.profile,words:readWords_(ss,id,true),testMode:id===TEACHER_TEST_ID};
+ return {session,revision:prof.revision,profile:prof.profile,words:readWords_(ss,id,true),companionRegistry:registry,testMode:id===TEACHER_TEST_ID};
 }
 
 function studentLogout(session){
@@ -336,7 +399,8 @@ function studentSpecialReveal(session,plotIndex,expectedRevision,profileJson,eve
   if(crop.stage!==0||crop.pendingReveal!==true)throw Error('Complete the Water question before revealing a character.');
   const chance=Math.floor(Math.random()*100);
   crop.rarity=chance<5?3:chance<30?2:1;
-  crop.characterId=MAGIC_CHARACTERS[Math.floor(Math.random()*MAGIC_CHARACTERS.length)];
+  const choices=companionRegistry_().characters.filter(c=>c.enabled);
+  crop.characterId=choices[Math.floor(Math.random()*choices.length)].id;
   const testSeconds=user.id===TEACHER_TEST_ID?Number(profile.settings?.testGrowthSeconds)||0:0;
   crop.stage=1;crop.retryAfter=0;crop.wrong=0;crop.nextDueAt=Date.now()+(testSeconds>=1&&testSeconds<=120?testSeconds:60)*1000;
   delete crop.pendingReveal;

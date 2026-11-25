@@ -30,67 +30,19 @@ const SPECIAL_SEED={id:'special',name:'Special Seed',vi:'Hạt giống kỳ di�
 const SPECIAL_ACTIONS=['Water','Tend','Give Milk','Feed Meal'];
 const SPECIAL_ACTION_VI=['Tưới cây','Chăm sóc','Cho uống sữa','Cho ăn'];
 const SPECIAL_ANIM=['water','tend','give_milk','feed_meal'];
-const CHARACTER_DATA=[
- {id:'itadori_yuji',name:'Itadori Yuji',phrases:[
-  {en:'I won’t regret the way I live!',vi:'Tớ sẽ sống sao cho không phải hối tiếc!'},
-  {en:'We can do this together!',vi:'Chúng ta có thể cùng nhau làm được!'},
-  {en:'I’ll keep moving forward!',vi:'Tớ sẽ tiếp tục tiến về phía trước!'}]},
- {id:'monkey_d_luffy',name:'Monkey D. Luffy',phrases:[
-  {en:'I’m gonna be King of the Pirates!',vi:'Tớ sẽ trở thành Vua Hải Tặc!'},
-  {en:'Adventure is waiting for us!',vi:'Cuộc phiêu lưu đang chờ chúng ta!'},
-  {en:'I never leave my friends behind!',vi:'Tớ không bao giờ bỏ lại bạn bè!'}]},
- {id:'sakura_kinomoto',name:'Sakura Kinomoto',phrases:[
-  {en:'Everything will definitely be all right!',vi:'Nhất định mọi chuyện sẽ ổn thôi!'},
-  {en:'Believe in a little magic!',vi:'Hãy tin vào một chút phép màu!'},
-  {en:'Let’s make today wonderful!',vi:'Cùng biến hôm nay thành một ngày tuyệt vời nhé!'}]},
- {id:'doraemon',name:'Doraemon',phrases:[
-  {en:'I’ve got a gadget for that!',vi:'Tớ có bảo bối giúp được việc đó!'},
-  {en:'A good idea can solve a big problem!',vi:'Một ý tưởng hay có thể giải quyết vấn đề lớn!'},
-  {en:'Let’s help each other!',vi:'Chúng ta hãy giúp đỡ lẫn nhau!'}]},
- {id:'pikachu',name:'Pikachu',phrases:[
-  {en:'Pika, pika!',vi:'Pika, pika!'},
-  {en:'Pika-pika! You can do it!',vi:'Pika-pika! Bạn làm được mà!'},
-  {en:'Pika! What a happy day!',vi:'Pika! Thật là một ngày vui!'}]},
- {id:'shin_chan',name:'Shin-chan',phrases:[
-  {en:'Hey! It’s me, Shin-chan!',vi:'Xin chào! Shin-chan đây!'},
-  {en:'Let’s have some fun!',vi:'Cùng vui chơi nào!'},
-  {en:'I’ve got a silly idea!',vi:'Tớ có một ý tưởng ngộ nghĩnh đây!'}]},
- {id:'rudo',name:'Rudo',phrases:[
-  {en:'Even thrown-away things have value!',vi:'Ngay cả những thứ bị vứt bỏ cũng có giá trị!'},
-  {en:'Nothing is useless if you look closely!',vi:'Không gì là vô dụng nếu bạn nhìn kỹ!'},
-  {en:'I’ll build something better!',vi:'Tớ sẽ tạo ra thứ gì đó tốt đẹp hơn!'}]},
- {id:'sakura_haruka',name:'Sakura Haruka',phrases:[
-  {en:'Don’t underestimate me!',vi:'Đừng có coi thường tôi!'},
-  {en:'I can protect this place!',vi:'Tôi có thể bảo vệ nơi này!'},
-  {en:'You can count on me!',vi:'Cứ tin tưởng ở tôi!'}]},
- {id:'hoshina_soshiro',name:'Hoshina Soshiro',phrases:[
-  {en:'Leave this to me!',vi:'Cứ để tôi lo!'},
-  {en:'Stay calm and stay sharp!',vi:'Hãy bình tĩnh và luôn tỉnh táo!'},
-  {en:'A little practice goes a long way!',vi:'Luyện tập từng chút sẽ mang lại kết quả lớn!'}]},
- {id:'kamado_tanjiro',name:'Kamado Tanjiro',phrases:[
-  {en:'I’ll protect everyone!',vi:'Mình sẽ bảo vệ tất cả mọi người!'},
-  {en:'Kindness makes us stronger!',vi:'Lòng tốt khiến chúng ta mạnh mẽ hơn!'},
-  {en:'Take a breath. Keep going!',vi:'Hít một hơi nào. Tiếp tục cố gắng nhé!'}]},
- {id:'saitama',name:'Saitama',phrases:[
-  {en:'OK.',vi:'Ừ.'},
-  {en:'Let’s get this over with.',vi:'Làm cho xong chuyện này nào.'},
-  {en:'A good bargain makes my day!',vi:'Mua được món hời là vui cả ngày!'}]},
- {id:'asuna_yuuki',name:'Asuna Yuuki',phrases:[
-  {en:'I’ll fight by your side!',vi:'Mình sẽ chiến đấu bên cạnh bạn!'},
-  {en:'Together, we can find a way!',vi:'Cùng nhau, chúng ta sẽ tìm ra cách!'},
-  {en:'Courage starts with one step!',vi:'Lòng dũng cảm bắt đầu từ một bước chân!'}]},
- {id:'himmel',name:'Himmel',phrases:[{en:"I will remember this beautiful day.",vi:"Tôi sẽ nhớ ngày tươi đẹp này."},{en:"A kind act can brighten a journey.",vi:"Một hành động tử tế có thể làm hành trình tươi sáng hơn."},{en:"Let us make wonderful memories.",vi:"Hãy cùng tạo nên những kỷ niệm tuyệt vời."}]},
- {id:'frieren',name:'Frieren',phrases:[{en:"There is so much left to discover.",vi:"Vẫn còn rất nhiều điều để khám phá."},{en:"Even small moments are precious.",vi:"Ngay cả những khoảnh khắc nhỏ cũng rất quý giá."},{en:"Let us learn something new today.",vi:"Hôm nay hãy học thêm điều gì đó mới."}]},
- {id:'krixi',name:'Krixi',phrases:[{en:"The forest is full of surprises.",vi:"Khu rừng chứa đầy những bất ngờ."},{en:"Let us protect these beautiful flowers.",vi:"Hãy bảo vệ những bông hoa xinh đẹp này."},{en:"A little courage goes a long way.",vi:"Một chút dũng cảm sẽ giúp ta tiến xa."}]},
- {id:'veera',name:'Veera',phrases:[{en:"I have a clever plan!",vi:"Tôi có một kế hoạch thông minh!"},{en:"Trust your own abilities.",vi:"Hãy tin vào khả năng của mình."},{en:"Every puzzle has an answer.",vi:"Mọi câu đố đều có lời giải."}]},
- {id:'rouie',name:'Rouie',phrases:[{en:"A new path is opening.",vi:"Một con đường mới đang mở ra."},{en:"We can help our friends together.",vi:"Chúng ta có thể cùng giúp đỡ bạn bè."},{en:"Step through with confidence!",vi:"Hãy tự tin bước qua nào!"}]},
- {id:'dolia',name:'Dolia',phrases:[{en:"Can you hear the ocean singing?",vi:"Bạn có nghe đại dương đang hát không?"},{en:"Let us follow the flowing waves.",vi:"Hãy đi theo những con sóng đang trôi."},{en:"Music makes a journey brighter.",vi:"Âm nhạc khiến hành trình tươi sáng hơn."}]},
- {id:'bijan',name:'Bijan',phrases:[{en:"A long journey starts with one step.",vi:"Một hành trình dài bắt đầu bằng một bước chân."},{en:"I will lead the way.",vi:"Tôi sẽ dẫn đường."},{en:"We are stronger when we work together.",vi:"Chúng ta mạnh mẽ hơn khi cùng hợp tác."}]},
- {id:'conan_edogawa',name:'Conan Edogawa',phrases:[{en:"The clues are right here.",vi:"Manh mối ở ngay đây."},{en:"Look closely and think carefully.",vi:"Hãy quan sát kỹ và suy nghĩ cẩn thận."},{en:"Every mystery has a solution.",vi:"Mọi bí ẩn đều có lời giải."}]},
- {"id":"himekawa_yoshino","name":"Himekawa Yoshino","phrases":[{"en":"A gentle breeze makes me smile.","vi":"Một làn gió nhẹ khiến mình mỉm cười."},{"en":"We can be brave together.","vi":"Chúng ta có thể cùng nhau dũng cảm."},{"en":"My little friend keeps me company.","vi":"Người bạn nhỏ luôn ở bên mình."}]},
- {"id":"killua_zoldyck","name":"Killua Zoldyck","phrases":[{"en":"Let us explore somewhere new.","vi":"Hãy cùng khám phá một nơi mới."},{"en":"Practice helps me get better every day.","vi":"Luyện tập giúp mình tiến bộ mỗi ngày."},{"en":"A good friend is worth protecting.","vi":"Một người bạn tốt rất đáng để bảo vệ."}]},
-];
-const CHARACTER_BY_ID=Object.fromEntries(CHARACTER_DATA.map(c=>[c.id,c]));
+let CHARACTER_DATA=[];
+let CHARACTER_BY_ID=Object.create(null);
+let companionAssetVersion='initial';
+function setCompanionRegistry(registry){
+ if(!registry||!Array.isArray(registry.characters)||!registry.characters.length)throw Error('Companion catalog is unavailable. Please reload the game.');
+ CHARACTER_DATA=registry.characters;
+ CHARACTER_BY_ID=Object.fromEntries(CHARACTER_DATA.map(c=>[c.id,c]));
+ companionAssetVersion=registry.assetVersion||'initial';
+}
+function companionPortrait(c,found){
+ if(c.portrait)return `assets/companion-ui/portraits/${c.id}_${found?'portrait':'silhouette'}_128.png?v=${encodeURIComponent(companionAssetVersion)}`;
+ return companionArt(c.id,'idle','idle_down');
+}
 const FENCE_PRICE=20;
 const FENCE_GRID=32;
 // Sell for 75% of the individual item price. This is below every pack discount too,
@@ -136,7 +88,7 @@ const DECOR_PACKS=[
 const decorArt=item=>`assets/decorations/${item.pack}/${item.id}.png`;
 
 const SPECIAL_REWARDS={1:{gold:450,xp:12},2:{gold:900,xp:24},3:{gold:2100,xp:42}};
-const companionArt=(id,kind,filename)=>`assets/companions/${id}/${kind}/${filename}.png`;
+const companionArt=(id,kind,filename)=>`assets/companions/${id}/${kind}/${filename}.png?v=${encodeURIComponent(companionAssetVersion)}`;
 const specialSeedArt='assets/special/special_seed_planted.png';
 const specialSeedShopArt='assets/special/special_seed_shop.png';
 const STAGES = ['planted','watered','tended','fertilized','mature'];
@@ -152,7 +104,7 @@ const PLOT_UNLOCKS = [
   {level:15, price:700},{level:20, price:800}
 ];
 const STORAGE_PREFIX = 'vocabFarmDeveloperTest_v1_'; // SAME v0.18–v0.27 prefix: no forced reset
-const BUILD_ID='v0.49',BACKUP_EVERY_MS=10*60*1000;
+const BUILD_ID='v0.50',BACKUP_EVERY_MS=10*60*1000;
 const LAST_BUILD_PREFIX='vfi_last_build_v1_';
 let lastBackupAt=0,backupRunning=false,lastSaveErrorAt=0,pendingRecoveryImport=null;
 const BANK_KEY = 'vocabFarmDeveloperCustomBank_v1';
@@ -324,7 +276,7 @@ function rollCompanion(){
  const choice=CHARACTER_DATA[Math.floor(Math.random()*CHARACTER_DATA.length)];
  return {characterId:choice.id,rarity};
 }
-function petById(pet){return CHARACTER_BY_ID[pet.characterId]||CHARACTER_DATA[0]}
+function petById(pet){return CHARACTER_BY_ID[pet.characterId]||{id:pet.characterId,name:'Unknown companion',phrases:[]}}
 function effectPath(kind){return `assets/companion-effects/${kind}/${kind}_sheet.png`;}
 function spawnEffect(kind,x,y){magicEffects.push({kind,x,y,start:now()});magicEffects=magicEffects.slice(-24);}
 function drawEffects(){const elapsedNow=now();magicEffects=magicEffects.filter(e=>elapsedNow-e.start<950);for(const e of magicEffects){const im=asset(effectPath(e.kind));if(!im.complete||!im.naturalWidth)continue;const frame=Math.min(3,Math.floor((elapsedNow-e.start)/230));ctx.drawImage(im,frame*64,0,64,64,e.x-32,e.y-53,64,64);}}
@@ -1062,7 +1014,7 @@ function showCompanions(filter='all'){
   const rarities=[1,2,3].map(n=>({n,count:own.filter(p=>p.rarity===n).length})).filter(x=>x.count);
   const badges=rarities.map(x=>`<span class="collection-rarity rarity-${x.n}" aria-label="${x.n} star, quantity ${x.count}">${companionStars(x.n)} <small>×${x.count}</small></span>`).join('');
   const status=own.length?`<span class="collection-ownership">Owned ×${own.length}</span><div class="collection-rarities">${badges}</div>`:`<span class="collection-ownership">${found?'Discovered':'Undiscovered'}</span>`;
-  return `<article class="collection-entry ${found?'':'unknown'}"><div class="collection-portrait">${img(found?`assets/companion-ui/portraits/${c.id}_portrait_128.png`:`assets/companion-ui/portraits/${c.id}_silhouette_128.png`,'',found?c.name:'Mystery character')}</div><div class="collection-meta"><strong class="collection-name">${found?escapeHTML(c.name):'???'}</strong><div class="collection-status">${status}</div></div>${found?`<button class="collection-details-hit" type="button" data-do="companion-detail" data-character="${c.id}" aria-label="View ${escapeHTML(c.name)} companion details"></button>`:''}</article>`;
+  return `<article class="collection-entry ${found?'':'unknown'}"><div class="collection-portrait">${img(companionPortrait(c,found),'',found?c.name:'Mystery character')}</div><div class="collection-meta"><strong class="collection-name">${found?escapeHTML(c.name):'???'}</strong><div class="collection-status">${status}</div></div>${found?`<button class="collection-details-hit" type="button" data-do="companion-detail" data-character="${c.id}" aria-label="View ${escapeHTML(c.name)} companion details"></button>`:''}</article>`;
  }).join('');
  openModal('Companion Collection',`<div class="stat-strip"><span class="stat-chip">Discovered ${state.discovered.length}/${CHARACTER_DATA.length}</span><span class="stat-chip">On island ${state.companions.length}</span></div><p class="muted">Each Special Seed reveals a random companion and rarity. Discover all ${CHARACTER_DATA.length} characters!</p><div class="button-row collection-filters"><button class="secondary-btn" data-do="companions" data-filter="all">All</button>${[1,2,3].map(n=>`<button class="secondary-btn" data-do="companions" data-filter="${n}" aria-label="Show ${n}-star companions">${companionStars(n)}</button>`).join('')}</div><div class="collection-grid-v024">${cards||'<p>No matching companions yet.</p>'}</div>`,`${CHARACTER_DATA.length} CHARACTERS · COLLECTION`,'companions');
 }
@@ -1076,7 +1028,7 @@ function showCompanionDetail(characterId){
  }).join('');
  const phrases=c.phrases.map((phrase,i)=>`<div class="companion-phrase-pair"><span class="phrase-index">${i+1}</span><div><strong lang="en">${escapeHTML(phrase.en)}</strong><span lang="vi">${escapeHTML(phrase.vi)}</span></div></div>`).join('');
  openModal(c.name,`<div class="companion-details-intro">
-   ${img(`assets/companion-ui/portraits/${c.id}_portrait_128.png`,'companion-details-portrait',c.name)}
+   ${img(companionPortrait(c,true),'companion-details-portrait',c.name)}
    <div><h3>${escapeHTML(c.name)}</h3><p>Owned ×${owned.length}</p><div class="collection-rarities">${raritySummary||'<span class="muted">Discovered · no companions on island</span>'}</div></div>
   </div>
   <h3 class="section-heading">English & Vietnamese catchphrases</h3>
@@ -1948,7 +1900,7 @@ async function beginGame(){let slot;const loginId=$('studentSelect').value.trim(
  try{
   if(ONLINE){const resp=await serverCall('studentLogin',loginId,pin);
    slot=String(resp.profile?.id||'');if(!/^0[1-9]$|^1[01]$/.test(slot))throw Error('The online profile is unavailable. Please contact your teacher.');
-   onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];onlinePendingActions=[];bank=resp.words||[];
+   onlineToken=resp.session;onlineRevision=Number(resp.revision)||0;onlineDirty=false;onlinePendingEvents=[];onlinePendingActions=[];bank=resp.words||[];setCompanionRegistry(resp.companionRegistry);
    onlineTestMode=resp.testMode===true&&slot==='11';document.body.classList.toggle('teacher-test-mode',onlineTestMode);$('devToolsButton').classList.toggle('hidden',!onlineTestMode);
    if(!resp.profile)throw Error('The online profile is unavailable. No replacement account will be created.');state=VFIRecovery.migrateProfile(resp.profile,newProfile(slot),slot);delete state.landTax;
    if(!state.plots||state.plots.length!==10)throw Error('Invalid online progress.');

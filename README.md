@@ -1,11 +1,10 @@
-# Vocab Farm Island — classroom game v0.49
+# Vocab Farm Island — classroom game v0.50
 
 ## Play
 
 - **Official classroom link:** https://viviantran253-commits.github.io/vocab-farm-island-private/
 - The GitHub page opens the live Google Apps Script game. Enter the student number and private passcode. Existing four-digit codes work; new and reset codes have six digits. The public demo codes do not work here.
 - The private Google Sheet supplies each student's vocabulary and stores their progress and answer history. New vocabulary appears after signing in again or choosing **Your Farmhouse → Answer history → Reload words** in the game.
-- **Offline demo:** [demo.html](demo.html) is the older v0.13 local demo. It saves only in that browser and does not use the teacher Sheet.
 
 ## Teacher workflow
 
@@ -25,13 +24,12 @@ Students type their number and private passcode on the login page. In the teache
 
 ## Code and updates
 
-- [v0.42 source bundle](staging/v0.42/README_START_HERE.md) retains the supplied student candidate and public assets. The official student source merges its new features with the existing classroom login and private Sheet settings.
-- [v0.30 staging](staging/v0.30/README.md) remains as the previous source reference and rollback asset set.
+- `assets/` contains every image used by the official game. The `assets/companions/registry.json` catalog lets the teacher add, replace, or disable companions through GitHub. See [COMPANIONS.md](COMPANIONS.md).
+- Run `node scripts/validate-assets.mjs` before publishing assets. It checks every registered companion image, dimensions, references, and unused files.
 - `google-apps-script/student-app/` contains the live web app source. After editing it, copy changed files into the Apps Script project and **deploy a new version of the existing web app deployment**.
 - `google-apps-script/teacher-dashboard/` contains the separate Sheet-bound teacher dashboard source.
 - Both Apps Script folders include their deployment manifest. The private `SHEET_ID`, `ASSET_BASE_URL`, passcodes, and Google credentials remain in Google or the teacher's private Sheet and are not in this source archive.
-- `game.js`, `style.css`, and `map-config.js` power the older `demo.html` only. The official game uses `google-apps-script/student-app/`.
-- `FINAL_SETUP_GOOGLE_SHEETS_GITHUB.md` is a setup guide for a fresh installation. This repository is already connected and deployed.
+- Rollback point: Git tag `rollback-before-dynamic-companions-2026-11-25` and student Apps Script version 20. Restore both together if needed; old code refers to the old staging asset path.
 
 Existing offline demo progress is not imported into the teacher Sheet. Google Apps Script and Sheets service quotas still apply.
 
