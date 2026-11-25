@@ -709,16 +709,17 @@ function showPlantVocabulary(word){
  const update=()=>{
   if(activeModal!=='plant-exposure'){clearInterval(plantReadTicker);plantReadTicker=null;plantReadUntil=0;return;}
   const remaining=Math.max(0,Math.ceil((plantReadUntil-now())/1000));
-  const counter=$('plantReadingClock');if(counter)counter.textContent='0:'+String(remaining).padStart(2,'0');
+  const counter=$('plantReadingClock');
   if(remaining===0){
    // Do not dismiss the vocabulary card. Unlock its X only after the eight-second study period.
+   counter?.remove();
    plantReadUntil=0;
    clearInterval(plantReadTicker);plantReadTicker=null;
    $('modalPanel').dataset.ready='true';
    $('modalClose').setAttribute('aria-label','Close vocabulary window');
    const note=$('plantReadingReady');
    if(note)note.textContent='Take your time. Close when ready.';
-  }
+  }else if(counter)counter.textContent='0:'+String(remaining).padStart(2,'0');
  };
  update();plantReadTicker=setInterval(update,80);
 }

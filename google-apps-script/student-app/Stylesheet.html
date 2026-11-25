@@ -118,7 +118,7 @@
 @media(max-width:390px){.modal[data-mode="question"] .modal-body {padding:18px 13px 22px;}.question-title{font-size:21px}.choice-btn{font-size:17px}.word-card .word-line{font-size:19px}.coin-inline{width:20px!important;height:20px!important}}
 
 /* v0.3 mandatory, visible 2-second farm actions */
-.farm-action-banner{position:absolute;z-index:40;left:50%;bottom:clamp(20px,10vh,110px);transform:translateX(-50%);width:min(380px,85vw);padding:14px 18px;background:rgba(255,248,218,.97);border:3px solid #ad7b3e;border-radius:18px;box-shadow:0 8px 20px #242b1e66;display:flex;gap:8px;flex-direction:column;align-items:center;font:800 clamp(17px,2.3vw,24px) Trebuchet MS,sans-serif;color:#59402c;text-align:center;pointer-events:none}.farm-action-banner.hidden{display:none}.farm-action-banner small{font-size:12px}.farm-action-track{height:13px;background:#e6cf98;border-radius:10px;overflow:hidden;width:100%}.farm-action-track>div{height:100%;width:0%;background:linear-gradient(90deg,#83c06f,#318e4d);border-radius:10px}
+.farm-action-banner{position:absolute;z-index:40;left:50%;bottom:clamp(20px,10vh,110px);transform:translateX(-50%);width:min(380px,85vw);padding:14px 18px;background:rgba(255,248,218,.97);border:3px solid #ad7b3e;border-radius:18px;box-shadow:0 8px 20px #242b1e66;display:flex;gap:8px;flex-direction:column;align-items:center;font-family:Arial,"Noto Sans",sans-serif;font-size:clamp(17px,2.3vw,24px);font-weight:800;line-height:1.35;letter-spacing:normal;color:#59402c;text-align:center;pointer-events:none}.farm-action-banner.hidden{display:none}.farm-action-banner small{font-size:12px}.farm-action-track{height:13px;background:#e6cf98;border-radius:10px;overflow:hidden;width:100%}.farm-action-track>div{height:100%;width:0%;background:linear-gradient(90deg,#83c06f,#318e4d);border-radius:10px}
 /* v0.4+ — player audio and mobile-friendly word cards */
 .word-card .word-line {display:block;line-height:1.8;}
 .speak-word{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin:0 7px 0 8px;width:47px;height:44px;background:#eaf7e0;border:2px solid #92b877;border-radius:12px;font-size:24px;line-height:1;cursor:pointer;touch-action:manipulation;box-shadow:0 2px #c6d4a8;}
@@ -389,7 +389,7 @@
    until the student deliberately closes it with X. */
 .modal[data-mode="plant-exposure"]:not([data-ready="true"]) .close-btn{display:none!important}
 .modal[data-mode="plant-exposure"][data-ready="true"] .close-btn{display:flex!important;align-items:center;justify-content:center}
-.modal[data-mode="plant-exposure"][data-ready="true"] .plant-reading-clock{background:#eaf4dd;border-color:#89b779;color:#286a3a}
+.modal[data-mode="plant-exposure"][data-ready="true"] .plant-reading-top{padding-right:96px}
 .modal[data-mode="plant-exposure"] .modal-heading{padding:12px 18px}
 .modal[data-mode="plant-exposure"] .word-card{margin:12px 0}
 .plant-reading-top{display:flex;justify-content:space-between;gap:12px;align-items:center;font-family:Arial,"Segoe UI","Noto Sans",sans-serif;font-size:clamp(15px,3.5vw,20px);font-weight:800}
